@@ -25,7 +25,16 @@
 3. **Dữ liệu số liệu (điểm chuẩn, chỉ tiêu, học phí) không nên để LLM “nhớ” qua RAG.** Nên lưu thành bảng có cấu trúc và cho Agent gọi qua tool. Đây là cách chống bịa số liệu hiệu quả nhất, và cũng là điểm đóng góp rõ ràng cho mục tiêu (2).
 4. **Đề án tuyển sinh 2027 thường công bố khoảng tháng 3–4.** Lúc nghiệm thu, dữ liệu có thể vẫn là của năm 2026. Vì vậy trang quản trị cần cho phép cập nhật dữ liệu theo năm, và mọi câu trả lời phải ghi rõ nguồn và năm áp dụng.
 5. **Kinh phí thấp (≈5 triệu).** Ưu tiên mô hình mã nguồn mở hoặc API giá rẻ/miễn phí, cùng một VPS nhỏ (xem mục 6).
-6. **Dùng Gemini Live (cập nhật 04/11/2026).** Kênh giọng nói chuyển sang Gemini Live API (speech-to-speech). Pipeline STT → LLM → TTS chỉ còn làm baseline thực nghiệm. Nên cập nhật câu chữ trong đề cương cho khớp:
+6. **Định vị đề tài: nghiên cứu Ứng dụng (loại C), dùng Gemini Live.** Trọng tâm là ứng dụng công nghệ sẵn có để giải quyết bài toán thực tế của trường, không phát triển mô hình mới. Vì vậy kênh giọng nói dùng nền tảng Gemini Live API (speech-to-speech) thay vì tự ghép STT → LLM → TTS. Phần việc của nhóm tập trung vào:
+   - Cơ sở tri thức và công cụ tra cứu bám dữ liệu chính thức.
+   - Tích hợp vào website và trang quản trị.
+   - Thử nghiệm với người dùng thật và đánh giá hiệu quả ứng dụng.
+
+   Phần kết quả cần có sản phẩm chạy được, đánh giá được và có khả năng chuyển giao. Không đặt nặng tính mới về thuật toán.
+
+   Cần làm trên đề cương:
+   - Ở mục 2, đánh dấu ô **“Ứng dụng”**.
+   - Cập nhật câu chữ cho khớp:
    - Mục tiêu (3) sửa thành “tích hợp mô hình tương tác giọng nói thời gian thực (Gemini Live) và so sánh với kiến trúc nhận dạng – tổng hợp tiếng nói truyền thống”.
    - Chương 1 bổ sung lý thuyết về mô hình speech-to-speech / native audio.
 7. Một số lỗi nhỏ trong đề cương nên sửa trước khi nộp: SĐT nhà riêng và di động của GVHD trùng với số tổng đài trường; dòng ký tên ghi “năm 201…”; mục “Chương trình đào tạo” còn bỏ trống; nên kiểm tra lại các ô chọn ở mục 2–3.
@@ -36,7 +45,7 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
 
 - **Kênh giọng nói dùng Gemini Live API (mô hình native audio).** Mô hình nghe và nói trực tiếp. Phát hiện tiếng nói (VAD), ngắt lời (barge-in) và giọng đọc đã có sẵn. Mô hình gọi tool của nhóm qua function calling.
 - **Kênh văn bản dùng Gemini API thường** (dòng Flash), với cùng system prompt và cùng tools, để hai kênh trả lời nhất quán.
-- **Pipeline cascade STT → LLM → TTS** (PhoWhisper + LLM + TTS tiếng Việt) chỉ dùng làm **baseline để thực nghiệm so sánh**, không triển khai cho người dùng.
+- *(Tùy chọn, chỉ làm nếu dư thời gian)* Pipeline cascade STT → LLM → TTS làm mốc tham chiếu. Với đề tài ứng dụng, phần này **không bắt buộc**.
 
 ```
 [Widget trên website]
@@ -77,7 +86,7 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
 | Nhận dạng tên ngành sai | Tool có fuzzy match tên ngành / từ đồng nghĩa (“IT”, “công nghệ thông tin”, “CNTT”) |
 | Âm thanh gửi lên máy chủ Google | Thông báo và xin đồng ý trên widget; dùng gói trả phí (điều khoản dữ liệu chặt hơn gói miễn phí); không lưu audio, chỉ lưu transcript đã ẩn danh |
 | Tên model và tính năng Live API thay đổi nhanh (preview) | Gom cấu hình model vào biến môi trường; kiểm tra lại tài liệu chính thức trước mỗi giai đoạn |
-| Phụ thuộc một nhà cung cấp | Thiết kế lớp `VoiceProvider` trừu tượng; baseline cascade chính là phương án dự phòng |
+| Phụ thuộc một nhà cung cấp | Gom cấu hình model vào một chỗ; nếu Live API gặp sự cố thì widget tự chuyển sang kênh văn bản |
 
 **Công cụ (tool) dự kiến:**
 - `tra_diem_chuan(nganh, nam, phuong_thuc)`
@@ -92,7 +101,7 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
 
 | Thành phần | Triển khai chính | Dùng để so sánh trong thực nghiệm |
 |---|---|---|
-| Kênh giọng nói | **Gemini Live API**, model native audio (vd. dòng `gemini-2.5-flash-native-audio-*`, cần kiểm tra tên model mới nhất) | Cascade: PhoWhisper/Whisper → LLM → TTS (edge-tts / VietTTS) |
+| Kênh giọng nói | **Gemini Live API**, model native audio (vd. dòng `gemini-2.5-flash-native-audio-*`, cần kiểm tra tên model mới nhất) | Các cấu hình trong Gemini Live: model, giọng đọc, độ nhạy VAD · *(tùy chọn)* cascade PhoWhisper → LLM → TTS |
 | Kênh văn bản | Gemini Flash (generateContent + function calling) | Một LLM khác hoặc mô hình mở (Qwen) |
 | SDK | `google-genai` (Python) phía backend | — |
 | Embedding | `bge-m3` hoặc Gemini embedding | `multilingual-e5`, bi-encoder tiếng Việt |
@@ -102,7 +111,7 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
 | Triển khai | Docker Compose trên VPS gần Google (Singapore) | — |
 
 **Mục tiêu hiệu năng (đề xuất)**
-- Độ trễ từ lúc ngừng nói đến lúc nghe âm thanh đầu tiên: p50 ≤ 1,5 s với Gemini Live (baseline cascade dự kiến 2,5–4 s).
+- Độ trễ từ lúc ngừng nói đến lúc nghe âm thanh đầu tiên: p50 ≤ 1,5 s, p95 ≤ 3 s.
 - Tỉ lệ trả lời đúng ≥ 85%. Sai số liệu ≈ 0% với câu hỏi cần tool, và tỉ lệ gọi tool đúng ≥ 95%.
 - WER của transcript đầu vào < 15% với giọng ba miền.
 
@@ -147,20 +156,24 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
   - Chế độ chat + voice, phụ đề theo thời gian thực, hiển thị thẻ nguồn trích dẫn.
   - Nút “gặp cán bộ tư vấn”, giao diện tốt trên di động (iOS Safari cần kiểm tra kỹ quyền mic và autoplay).
 - Tinh chỉnh system instruction cho phong cách nói và cách đọc số, mã tổ hợp, viết tắt (“CNTT”, “KTX”).
-- **Dựng baseline cascade ở mức tối thiểu** (chạy offline/CLI, không cần widget) để phục vụ thực nghiệm so sánh.
 - Thu **bộ test giọng nói:** ≥ 20 người nói thuộc ba miền, ≥ 200 câu, có cả trường hợp yên tĩnh và có tạp âm.
 - 01/02 – 15/02: **nghỉ Tết / dự phòng**.
 - 16/02 – 28/02: sửa lỗi, tối ưu độ trễ, triển khai lên VPS/staging, nhúng thử vào một trang demo mô phỏng website tuyển sinh.
+- Làm việc với phòng tuyển sinh / Viện CNS về phương án nhúng thử lên website thật (hoặc subdomain), quy trình cập nhật dữ liệu và người tiếp nhận ticket.
 - ✅ Mốc M3 (≈ 28/02): website có trợ lý giọng nói chạy end-to-end trên môi trường thật.
 
-### Giai đoạn 4: Thực nghiệm, đánh giá, báo cáo (01/03 – 31/03/2027)
-- **Thực nghiệm so sánh** (bảng kết quả cho Chương 3):
-  1. LLM: A vs. B
-  2. Chunking: cố định vs. theo cấu trúc
-  3. Retrieval: dense vs. hybrid vs. hybrid + rerank
-  4. RAG thuần vs. RAG + tools (cho câu hỏi số liệu)
-  5. **Gemini Live (native audio) vs. cascade (PhoWhisper + LLM + TTS)**: so sánh độ trễ, độ chính xác, WER transcript, độ tự nhiên (MOS do người nghe chấm) và chi phí mỗi hội thoại. Đây là đóng góp chính cho bài báo.
-  6. STT trong cascade: PhoWhisper vs. Whisper, phân theo miền và độ ồn
+### Giai đoạn 4: Thử nghiệm ứng dụng, đánh giá, báo cáo (01/03 – 31/03/2027)
+Với đề tài ứng dụng, trọng tâm của giai đoạn này là **chứng minh hệ thống dùng được và có ích**. So sánh cấu hình chỉ làm ở mức vừa đủ, đúng như mục 11 của đề cương.
+- **Thử nghiệm triển khai (pilot), 2–3 tuần:**
+  - Mở cho nhóm người dùng thật dùng thử: học sinh THPT ở 1–2 trường, sinh viên năm nhất, phụ huynh.
+  - Nhờ cán bộ tuyển sinh dùng trang quản trị để cập nhật dữ liệu và xử lý ticket.
+  - Thu log thật để phân tích: chủ đề hay hỏi, tỉ lệ chuyển tiếp, câu chưa trả lời được.
+- **So sánh cấu hình ở mức vừa đủ** (bảng kết quả cho Chương 3):
+  1. Truy xuất dữ liệu: dense vs. hybrid + rerank
+  2. RAG thuần vs. RAG + tools (cho câu hỏi số liệu)
+  3. Hai model Gemini cho kênh văn bản, hoặc hai cấu hình của Live (model, giọng đọc)
+  4. Độ chính xác nhận dạng giọng nói theo miền và độ ồn, đo trên transcript của Gemini Live
+  5. *(Tùy chọn)* So với pipeline cascade tự ghép
 - **Chỉ số:**
   - Tỉ lệ trả lời đúng (chấm tay kết hợp LLM-as-judge, có kiểm tra độ đồng thuận)
   - Faithfulness / context precision (RAGAS)
@@ -169,7 +182,9 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
   - WER/CER
   - Độ trễ p50/p95 của từng chặng
 - **Thử nghiệm người dùng:** ≥ 30 người (học sinh, sinh viên năm nhất, phụ huynh), dùng phiếu SUS + CSAT và câu hỏi mở.
-- Viết báo cáo tổng kết theo cấu trúc Mở đầu → Chương 1–3 → Kết luận, HDSD, bản thảo bài báo (có thể nhắm hội nghị hoặc tạp chí trong nước).
+- **Đánh giá hiệu quả ứng dụng:** ước tính số câu hỏi hệ thống tự giải quyết được, so với số câu cần chuyển cán bộ. Phỏng vấn cán bộ tuyển sinh về mức độ giảm tải và tính dễ cập nhật dữ liệu.
+- Viết báo cáo tổng kết theo cấu trúc Mở đầu → Chương 1–3 → Kết luận. Kèm HDSD và tài liệu triển khai/bàn giao cho nhà trường.
+- Bản thảo bài báo dạng ứng dụng / báo cáo kinh nghiệm triển khai, có thể gửi hội nghị sinh viên NCKH hoặc kỷ yếu trong nước.
 - ✅ Mốc M4 (31/03): nộp báo cáo, sản phẩm, mã nguồn, bộ dữ liệu.
 
 ### Tóm tắt dạng Gantt
@@ -182,9 +197,8 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
 | Trang quản trị | | ██ | ██ | | |
 | Prototype Gemini Live | | ██ | | | |
 | Proxy Live + widget giọng nói | | | ████ | ░██ | |
-| Baseline cascade (offline) | | | █ | ██ | |
 | Thu bộ test giọng nói | | | ██ | | |
-| Thực nghiệm + user test | | | | █ | ████ |
+| Pilot với người dùng + đánh giá | | | | █ | ████ |
 | Viết báo cáo / bài báo | (viết dần Ch.1) | | (Ch.2) | | ████ |
 
 (░ = nghỉ Tết)
@@ -196,7 +210,7 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
 | Quản lý tiến độ, làm việc với GVHD và phòng tuyển sinh | Nguyên (nhóm trưởng) | Tuấn |
 | Khảo sát, thu thập và chuẩn hóa dữ liệu, bộ test | Nguyên | Tuấn |
 | Kiến trúc, backend, Agent, RAG, tools, triển khai | Tuấn | Nguyên |
-| Tích hợp Gemini Live, streaming audio, baseline cascade | Tuấn | Nguyên |
+| Tích hợp Gemini Live, streaming audio | Tuấn | Nguyên |
 | Widget website, trang quản trị (frontend) | Nguyên | Tuấn |
 | Thực nghiệm, đánh giá, thử nghiệm người dùng | Cả nhóm | |
 | Báo cáo: Ch.1 + khảo sát (Nguyên) · Ch.2–3 kỹ thuật (Tuấn) · bài báo (cả nhóm) | | |
@@ -235,3 +249,4 @@ Hệ thống dùng chung **một bộ công cụ (tools) và một cơ sở tri 
 3. Bộ dữ liệu kiểm thử: ≥ 300 Q&A văn bản, ≥ 200 mẫu giọng nói, kèm script đánh giá
 4. Tài liệu SRS, PTTK, HDSD (người dùng và quản trị)
 5. Báo cáo tổng kết + bản thảo bài báo + video demo
+6. Tài liệu triển khai và bàn giao (cài đặt, cập nhật dữ liệu theo mùa tuyển sinh, vận hành, chi phí API dự kiến)
