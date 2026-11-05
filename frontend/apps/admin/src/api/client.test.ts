@@ -66,4 +66,41 @@ describe("apiFetch", () => {
     await apiFetch("/api/x");
     expect(auth).toBeNull();
   });
+
+  it("gives a non-empty Vietnamese title for a 502 HTML body", async () => {
+    server.use(http.get("/api/x", () => new HttpResponse("<html>Bad Gateway</html>", { status: 502, statusText: "" })));
+    const err = (await apiFetch("/api/x").catch((e: unknown) => e)) as ApiError;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(502);
+    expect(err.title).toBe("Lỗi máy chủ (502)");
+  });
+
+  it("tolerates non-object JSON and non-string title", async () => {
+    server.use(http.get("/api/x", () => HttpResponse.json({ title: 5, errors: [] }, { status: 400 })));
+    const err = (await apiFetch("/api/x").catch((e: unknown) => e)) as ApiError;
+    expect(err.title).toBe("Có lỗi xảy ra (400)");
+    expect(err.fieldErrors).toEqual({});
+    server.use(http.get("/api/y", () => HttpResponse.json(null, { status: 409 })));
+    const err2 = (await apiFetch("/api/y").catch((e: unknown) => e)) as ApiError;
+    expect(err2.title).toBe("Có lỗi xảy ra (409)");
+  });
+
+  it("returns undefined for a 2xx with empty body", async () => {
+    server.use(http.post("/api/x", () => new HttpResponse("", { status: 200 })));
+    await expect(apiFetch("/api/x", { method: "POST" })).resolves.toBeUndefined();
+  });
+
+  it("sends FormData without a JSON Content-Type", async () => {
+    let ct: string | null = null;
+    server.use(
+      http.post("/api/x", ({ request }) => {
+        ct = request.headers.get("Content-Type");
+        return HttpResponse.json({});
+      }),
+    );
+    const fd = new FormData();
+    fd.append("file", new Blob(["a"]), "a.csv");
+    await apiFetch("/api/x", { method: "POST", body: fd });
+    expect(ct).toMatch(/^multipart\/form-data/);
+  });
 });

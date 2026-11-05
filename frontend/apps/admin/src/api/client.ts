@@ -31,18 +31,27 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 const LOGIN_PATH = "/api/auth/login";
 
 async function toApiError(res: Response): Promise<ApiError> {
-  let body: { title?: string; errors?: Record<string, string[]>; thamChieu?: string[] } = {};
+  let body: Record<string, unknown> = {};
   try {
-    body = (await res.json()) as typeof body;
+    const parsed: unknown = await res.json();
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      body = parsed as Record<string, unknown>;
+    }
   } catch {
     // thân phản hồi không phải JSON
   }
-  return new ApiError(
-    res.status,
-    body.title ?? res.statusText ?? "Đã xảy ra lỗi",
-    body.errors ?? {},
-    body.thamChieu ?? [],
-  );
+  const title =
+    typeof body.title === "string" && body.title.trim() !== ""
+      ? body.title
+      : res.status >= 500
+        ? `Lỗi máy chủ (${res.status})`
+        : `Có lỗi xảy ra (${res.status})`;
+  const errors =
+    body.errors && typeof body.errors === "object" && !Array.isArray(body.errors)
+      ? (body.errors as Record<string, string[]>)
+      : {};
+  const thamChieu = Array.isArray(body.thamChieu) ? (body.thamChieu as string[]) : [];
+  return new ApiError(res.status, title, errors, thamChieu);
 }
 
 async function request(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
@@ -67,7 +76,8 @@ async function request(path: string, init: RequestInit & { json?: unknown } = {}
 export async function apiFetch<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const res = await request(path, init);
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  const text = await res.text();
+  return (text === "" ? undefined : JSON.parse(text)) as T;
 }
 
 export async function downloadBlob(path: string, fileName: string): Promise<void> {

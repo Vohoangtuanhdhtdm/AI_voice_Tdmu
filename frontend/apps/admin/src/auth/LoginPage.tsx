@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, apiFetch } from "../api/client";
 import type { LoginResponse } from "../api/types";
 import { authStore } from "./authStore";
+import { safeReturnTo } from "./safeReturnTo";
 
 interface FormValues {
   email: string;
@@ -22,7 +23,7 @@ export function LoginPage() {
     try {
       const r = await apiFetch<LoginResponse>("/api/auth/login", { method: "POST", json: values });
       authStore.setSession(r);
-      navigate(params.get("returnTo") ?? "/", { replace: true });
+      navigate(safeReturnTo(params.get("returnTo")), { replace: true });
     } catch (e) {
       if (e instanceof ApiError) {
         setError(e.status === 401 ? "Email hoặc mật khẩu không đúng" : e.title);

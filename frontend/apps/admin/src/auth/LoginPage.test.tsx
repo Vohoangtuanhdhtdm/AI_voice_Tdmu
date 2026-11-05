@@ -71,4 +71,37 @@ describe("LoginPage", () => {
       expect(screen.getByText("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại")).toBeInTheDocument(),
     );
   });
+
+  it.each([
+    ["https://evil.com", "/"],
+    ["//evil.com", "/"],
+    ["/\\evil.com", "/"],
+    ["/login?x", "/"],
+  ])("ignores unsafe returnTo %s", async (raw) => {
+    server.use(
+      http.post("/api/auth/login", () =>
+        HttpResponse.json({ accessToken: "abc", expiresAt: new Date(Date.now() + 3600_000).toISOString() }),
+      ),
+    );
+    renderWithProviders(
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<div>Trang chủ</div>} />
+      </Routes>,
+      { route: `/login?returnTo=${encodeURIComponent(raw)}` },
+    );
+    await submit();
+    expect(await screen.findByText("Trang chủ")).toBeInTheDocument();
+  });
+
+  it("keeps a safe returnTo with query", async () => {
+    server.use(
+      http.post("/api/auth/login", () =>
+        HttpResponse.json({ accessToken: "abc", expiresAt: new Date(Date.now() + 3600_000).toISOString() }),
+      ),
+    );
+    renderLogin(`/login?returnTo=${encodeURIComponent("/kb/nganh?nam=2026")}`);
+    await submit();
+    expect(await screen.findByText("Trang ngành")).toBeInTheDocument();
+  });
 });
