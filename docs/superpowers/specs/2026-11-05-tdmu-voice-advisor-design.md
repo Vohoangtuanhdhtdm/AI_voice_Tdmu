@@ -113,7 +113,7 @@ docker-compose.yml                     postgres, api, admin, showcase (nginx)
 - **Danh sách thay đổi trước khi xuất bản:** so sánh bản nháp với release đang hoạt động theo khóa nghiệp vụ, ví dụ (ngành, năm, phương thức).
 - **Khôi phục:** kích hoạt lại một release cũ. Có thể chọn chép release đó ngược về bản nháp.
 - **Hỏi thử:** gọi Agent với `KbScope.Draft`. Chỉ người dùng admin đã xác thực mới được dùng.
-- **Audit log:** ghi lại mọi thao tác thêm/sửa/xóa trên bản nháp và mọi lần xuất bản/khôi phục. Mỗi dòng gồm `entity, entity_id, action, before_json, after_json, user_id, at`.
+- **Audit log:** ghi lại mọi thao tác thêm/sửa/xóa trên bản nháp và mọi lần xuất bản/khôi phục. Mỗi dòng gồm `entity, entity_logical_id, action, before_json, after_json, user_id, at` (`entity_logical_id` là logical id của bản ghi tri thức, hoặc id của release với thao tác xuất bản/khôi phục).
 
 ### 4.2 Các thực thể
 Mọi bản ghi tri thức có `nguon_ten` và `nguon_url` để trích dẫn.
@@ -127,7 +127,7 @@ Mọi bản ghi tri thức có `nguon_ten` và `nguon_url` để trích dẫn.
 | `nganh_to_hop` | `nganh_lid`, `nam`, `to_hop_lid` | unique cả ba theo release |
 | `diem_chuan` | `nganh_lid`, `nam`, `phuong_thuc_lid`, `diem numeric(7,2)`, `ghi_chu` | unique (ngành, năm, phương thức) theo release |
 | `chi_tieu` | `nganh_lid`, `nam`, `phuong_thuc_lid?`, `so_luong` | unique (ngành, năm, phương thức) theo release |
-| `hoc_phi` | `nganh_lid?`, `nam`, `muc numeric(14,2)`, `don_vi` (tín chỉ/năm/học kỳ), `ghi_chu` | |
+| `hoc_phi` | `nganh_lid?`, `nam`, `muc numeric(14,2)`, `don_vi` (tín chỉ/năm/học kỳ), `ghi_chu` | unique (ngành hoặc chung khi `nganh_lid` null, năm, đơn vị) theo release |
 | `moc_thoi_gian` | `nam`, `ten_moc`, `bat_dau`, `ket_thuc?`, `phuong_thuc_lid?`, `mo_ta` | |
 | `faq` | `cau_hoi`, `cach_hoi_khac text[]`, `tra_loi`, `chu_de`, `embedding vector(768)` | |
 | `tai_lieu` | `tieu_de`, `duong_dan_file`, `nam_ap_dung`, `trang_thai` (cho_xu_ly/dang_xu_ly/xong/that_bai), `loi` | |
