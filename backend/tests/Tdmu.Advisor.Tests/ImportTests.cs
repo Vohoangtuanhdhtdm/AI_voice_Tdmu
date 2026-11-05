@@ -289,4 +289,25 @@ public class ImportTests(ApiFactory f)
         Assert.Equal(21m, Assert.Single(released).Diem);
         Assert.Equal(25m, Assert.Single(draft).Diem);
     }
+
+    [Fact]
+    public async Task Grouped_dgnl_score_with_three_decimals_is_row_error()
+    {
+        var c = await Seeded();
+        var j = await Json(await Post(c, "diem-chuan", "preview", Csv("ma_nganh;nam;ma_phuong_thuc;diem\n7480201;2026;dgnl;1.050")));
+        Assert.Equal(1, j.GetProperty("errorCount").GetInt32());
+        Assert.Equal(0, j.GetProperty("validCount").GetInt32());
+        Assert.Contains("1.050", j.GetProperty("rows")[0].GetProperty("errors")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Codes_differing_only_by_case_give_file_level_400_naming_code()
+    {
+        var c = await Seeded();
+        await Create(c, "nganh", new { maNganh = "abc1", ten = "Ngành thường" });
+        await Create(c, "nganh", new { maNganh = "ABC1", ten = "Ngành hoa" });
+        var res = await Post(c, "diem-chuan", "preview", Csv("ma_nganh;nam;ma_phuong_thuc;diem\n7480201;2026;thi-thpt;21"));
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Contains("ABC1", (await Json(res)).GetProperty("title").GetString(), StringComparison.OrdinalIgnoreCase);
+    }
 }

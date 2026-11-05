@@ -27,6 +27,9 @@ public class NumberParserTests
     [InlineData("1,2,3")]
     [InlineData("21,")]
     [InlineData("1e5")]
+    [InlineData("1.050")]
+    [InlineData("21.555")]
+    [InlineData("1,050")]
     public void Rejects(string? raw)
     {
         Assert.False(NumberParser.TryParseDecimal(raw, out _));

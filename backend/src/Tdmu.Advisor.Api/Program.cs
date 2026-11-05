@@ -98,6 +98,22 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
     using var scope = app.Services.CreateScope();
     await scope.ServiceProvider.GetRequiredService<AdvisorDbContext>().Database.MigrateAsync();
 }
+else if (!EF.IsDesignTime) // `dotnet ef` dừng host ngay sau Build(); kiểm tra thêm cho chắc chắn không chạm DB lúc design-time.
+{
+    // Staging/Production không tự migrate: thiếu migration thì dừng ngay với thông báo rõ ràng (xem backend/README.md mục 6),
+    // thay vì lỗi khó hiểu "relation ... does not exist" trong AdminSeeder.
+    using var scope = app.Services.CreateScope();
+    var pending = (await scope.ServiceProvider.GetRequiredService<AdvisorDbContext>().Database.GetPendingMigrationsAsync()).ToList();
+    if (pending.Count > 0)
+    {
+        app.Logger.LogCritical(
+            "CSDL chưa được migrate ({Count} migration chưa áp: {Pending}). Hãy chạy `dotnet ef database update` hoặc migration bundle trước khi khởi động (xem backend/README.md). " +
+            "Database has pending migrations; apply them before starting the API.",
+            pending.Count, string.Join(", ", pending));
+        Environment.ExitCode = 1;
+        return;
+    }
+}
 using (var seedScope = app.Services.CreateScope())
 {
     await AdminSeeder.SeedAsync(seedScope.ServiceProvider);

@@ -6,7 +6,7 @@ namespace Tdmu.Advisor.Api.Features.KnowledgeBase.Import;
 /// <summary>Đọc số từ file Excel/CSV của Việt Nam: chấp nhận dấu thập phân là ',' hoặc '.', không dùng culture của máy.</summary>
 public static partial class NumberParser
 {
-    [GeneratedRegex(@"^[+-]?[0-9]+([.,][0-9]+)?$")]
+    [GeneratedRegex(@"^[+-]?[0-9]+([.,][0-9]{1,2})?$")]
     private static partial Regex Pattern();
 
     [GeneratedRegex(@"^([0-9]+|[0-9]{1,3}(\.[0-9]{3})+|[0-9]{1,3}(,[0-9]{3})+)$")]
@@ -21,7 +21,8 @@ public static partial class NumberParser
         return decimal.TryParse(s.Replace(".", "").Replace(",", ""), NumberStyles.None, CultureInfo.InvariantCulture, out value);
     }
 
-    /// <summary>Từ chối chuỗi rỗng, chữ, và số có cả dấu phân nhóm lẫn dấu thập phân ("1.234,5").</summary>
+    /// <summary>Từ chối chuỗi rỗng, chữ, số có cả dấu phân nhóm lẫn dấu thập phân ("1.234,5"), và số có hơn 2 chữ số thập phân:
+    /// "1.050" nhiều khả năng là 1050 viết có dấu nhóm nghìn (điểm ĐGNL), đọc thành 1,05 là sai 1000 lần; cột numeric(7,2) cũng không chứa được.</summary>
     public static bool TryParseDecimal(string? raw, out decimal value)
     {
         value = 0;

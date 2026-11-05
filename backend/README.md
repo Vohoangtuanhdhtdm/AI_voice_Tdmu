@@ -79,10 +79,40 @@ dotnet ef migrations add <TenMigration> \
 `migrations add` không cần PostgreSQL đang chạy, nhưng `migrations remove` và `database update` thì cần (chạy `docker compose up -d postgres` ở mục 2). Hoàn tác migration vừa tạo (chưa áp):
 
 ```bash
+cd backend
+ConnectionStrings__Default="Host=localhost;Port=5432;Database=tdmu_advisor;Username=postgres;Password=<POSTGRES_PASSWORD>" \
+Auth__JwtKey="<chuỗi tối thiểu 32 ký tự>" \
 dotnet ef migrations remove --project src/Tdmu.Advisor.Api --startup-project src/Tdmu.Advisor.Api
 ```
 
 Migration được áp tự động khi chạy ở Development/Testing; xem lại file sinh ra trước khi commit.
+
+### Áp migration cho Staging/Production
+
+Ngoài Development/Testing, API **không** tự migrate. Khi khởi động, nếu CSDL còn migration chưa áp, API ghi log `Critical` liệt kê các migration còn thiếu và thoát với mã 1 (không chạy tiếp tới bước tạo admin). Áp migration trước mỗi lần triển khai bằng một trong hai cách:
+
+1. Trực tiếp bằng `dotnet ef` (máy có .NET SDK và truy cập được CSDL đích):
+
+   ```bash
+   cd backend
+   ConnectionStrings__Default="Host=<host>;Port=5432;Database=tdmu_advisor;Username=<user>;Password=<mật khẩu>" \
+   Auth__JwtKey="<chuỗi tối thiểu 32 ký tự>" \
+   dotnet ef database update --project src/Tdmu.Advisor.Api --startup-project src/Tdmu.Advisor.Api
+   ```
+
+   Hoặc truyền thẳng chuỗi kết nối: thêm `--connection "Host=...;Password=..."` (vẫn cần `Auth__JwtKey` vì Program kiểm tra khi build host).
+
+2. Migration bundle (file chạy độc lập, hợp cho CI/CD, máy đích không cần SDK):
+
+   ```bash
+   cd backend
+   ConnectionStrings__Default="Host=localhost;Database=x;Username=x;Password=x" Auth__JwtKey="<chuỗi tối thiểu 32 ký tự>" \
+   dotnet ef migrations bundle --project src/Tdmu.Advisor.Api --startup-project src/Tdmu.Advisor.Api -o efbundle --self-contained -r linux-x64
+   # trên máy triển khai (bundle dựng host của API nên cũng cần Auth__JwtKey):
+   Auth__JwtKey="<chuỗi tối thiểu 32 ký tự>" ./efbundle --connection "Host=<host>;Port=5432;Database=tdmu_advisor;Username=<user>;Password=<mật khẩu>"
+   ```
+
+Bundle và `database update` chỉ áp các migration còn thiếu, chạy lại nhiều lần vẫn an toàn. Lưu ý migration `HocPhiBusinessKey` thêm unique `(release_id, nganh_lid, nam, don_vi)` cho `hoc_phi`: nếu CSDL cũ đã có học phí trùng khóa này thì phải xóa bản trùng trước khi áp.
 
 ## 7. Tham quan nhanh luồng xuất bản (qua Swagger)
 

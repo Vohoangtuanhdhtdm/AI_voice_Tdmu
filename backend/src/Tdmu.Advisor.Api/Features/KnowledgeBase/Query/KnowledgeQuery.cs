@@ -23,7 +23,7 @@ public class KnowledgeQuery(AdvisorDbContext db) : IKnowledgeQuery
     {
         var rid = await ResolveReleaseAsync(scope, ct);
         return await db.Nganh.AsNoTracking().InScope(rid).OrderBy(n => n.MaNganh)
-            .Select(n => new NganhView(n.MaNganh, n.Ten, n.DonVi, n.MoTaNgan)).ToListAsync(ct);
+            .Select(n => new NganhView(n.MaNganh, n.Ten, n.DonVi, n.MoTaNgan, n.ConTuyen)).ToListAsync(ct);
     }
 
     public async Task<NganhDetailView?> GetNganhAsync(KbScope scope, string maNganh, CancellationToken ct)
@@ -31,7 +31,7 @@ public class KnowledgeQuery(AdvisorDbContext db) : IKnowledgeQuery
         var rid = await ResolveReleaseAsync(scope, ct);
         var n = await db.Nganh.AsNoTracking().InScope(rid).FirstOrDefaultAsync(x => x.MaNganh == maNganh, ct);
         if (n is null) return null;
-        var view = new NganhView(n.MaNganh, n.Ten, n.DonVi, n.MoTaNgan);
+        var view = new NganhView(n.MaNganh, n.Ten, n.DonVi, n.MoTaNgan, n.ConTuyen);
         var nam = await db.MuaTuyenSinh.AsNoTracking().InScope(rid).Where(m => m.LaHienTai)
             .Select(m => (int?)m.Nam).FirstOrDefaultAsync(ct);
         if (nam is null) return new(view, null, [], [], [], []);

@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NpgsqlTypes;
 using Pgvector;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Entities;
+using Tdmu.Advisor.Api.Features.KnowledgeBase.Releases;
 using Tdmu.Advisor.Api.Infrastructure;
 using Tdmu.Advisor.Tests.Infrastructure;
 
@@ -226,5 +227,62 @@ public class ReleaseTests(ApiFactory f)
     public async Task Release_endpoints_require_admin()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, (await f.CreateClient().GetAsync("/api/admin/releases")).StatusCode);
+    }
+
+    /// <summary>Giữ transaction xuất bản/khôi phục mở ngay sau khi khóa bảng, để kiểm tra CRUD phải chờ.</summary>
+    private static (TaskCompletionSource Locked, TaskCompletionSource Go) Hold(ReleaseService svc)
+    {
+        var locked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var go = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        svc.AfterTablesLocked = async _ => { locked.SetResult(); await go.Task; };
+        return (locked, go);
+    }
+
+    [Fact]
+    public async Task Crud_write_during_publish_waits_until_publish_commits()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var s = await SeedDrafts(c);
+        using var scope = f.Services.CreateScope();
+        var svc = scope.ServiceProvider.GetRequiredService<ReleaseService>();
+        var (locked, go) = Hold(svc);
+        var publish = svc.PublishAsync("v1", "test", default);
+        await locked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        var put = c.PutAsJsonAsync($"/api/admin/kb/nganh/{s.Nganh}", new { maNganh = "7480201", ten = "Đổi tên giữa chừng" });
+        Assert.NotSame(put, await Task.WhenAny(put, Task.Delay(TimeSpan.FromSeconds(2))));
+
+        go.SetResult();
+        var release = await publish.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(HttpStatusCode.OK, (await put.WaitAsync(TimeSpan.FromSeconds(30))).StatusCode);
+        await WithDb(async db =>
+        {
+            Assert.Equal("Công nghệ thông tin", (await db.Nganh.SingleAsync(x => x.ReleaseId == release.Id && x.LogicalId == s.Nganh)).Ten);
+            Assert.Equal("Đổi tên giữa chừng", (await db.Nganh.SingleAsync(x => x.ReleaseId == null && x.LogicalId == s.Nganh)).Ten);
+            return 0;
+        });
+    }
+
+    [Fact]
+    public async Task Crud_write_during_restore_waits_until_restore_commits()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        await SeedDrafts(c);
+        var r1 = await Publish(c);
+        using var scope = f.Services.CreateScope();
+        var svc = scope.ServiceProvider.GetRequiredService<ReleaseService>();
+        var (locked, go) = Hold(svc);
+        var restore = svc.RestoreToDraftAsync(r1, "test", default);
+        await locked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        var post = c.PostAsJsonAsync("/api/admin/kb/faq", new { cauHoi = "Thêm giữa chừng", traLoi = "ok" });
+        Assert.NotSame(post, await Task.WhenAny(post, Task.Delay(TimeSpan.FromSeconds(2))));
+
+        go.SetResult();
+        await restore.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(HttpStatusCode.Created, (await post.WaitAsync(TimeSpan.FromSeconds(30))).StatusCode);
+        Assert.Equal(1, await WithDb(db => db.Faq.CountAsync(x => x.ReleaseId == null)));
     }
 }

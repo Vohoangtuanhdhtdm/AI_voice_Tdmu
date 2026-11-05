@@ -72,4 +72,13 @@ public static partial class KbValidators
         else if (phuongThuc is not null && diem > phuongThuc.ThangDiem)
             e.Add("diem", $"Điểm không được vượt quá thang điểm của phương thức ({phuongThuc.ThangDiem:0.##})");
     }
+
+    /// <summary>Hạ thang điểm xuống dưới điểm chuẩn nháp đã có của phương thức sẽ làm các điểm đó vượt thang: từ chối.</summary>
+    public static async Task ThangDiemCoversDiemAsync(KbErrors e, AdvisorDbContext db, Guid phuongThucLid, decimal thangDiem, CancellationToken ct)
+    {
+        var max = await db.DiemChuan.AsNoTracking().Where(x => x.ReleaseId == null && x.PhuongThucLid == phuongThucLid)
+            .MaxAsync(x => (decimal?)x.Diem, ct);
+        if (max is { } m && thangDiem < m)
+            e.Add("thangDiem", $"Thang điểm không được nhỏ hơn điểm chuẩn cao nhất đang có của phương thức này ({m:0.##})");
+    }
 }
