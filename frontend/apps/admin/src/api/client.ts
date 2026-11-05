@@ -5,12 +5,14 @@ export class ApiError extends Error {
   readonly title: string;
   readonly fieldErrors: Record<string, string[]>;
   readonly thamChieu: string[];
+  readonly body?: unknown;
 
   constructor(
     status: number,
     title: string,
     fieldErrors: Record<string, string[]> = {},
     thamChieu: string[] = [],
+    body?: unknown,
   ) {
     super(title);
     this.name = "ApiError";
@@ -18,6 +20,7 @@ export class ApiError extends Error {
     this.title = title;
     this.fieldErrors = fieldErrors;
     this.thamChieu = thamChieu;
+    this.body = body;
   }
 }
 
@@ -32,8 +35,10 @@ const LOGIN_PATH = "/api/auth/login";
 
 async function toApiError(res: Response): Promise<ApiError> {
   let body: Record<string, unknown> = {};
+  let rawBody: unknown;
   try {
     const parsed: unknown = await res.json();
+    rawBody = parsed;
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       body = parsed as Record<string, unknown>;
     }
@@ -51,7 +56,7 @@ async function toApiError(res: Response): Promise<ApiError> {
       ? (body.errors as Record<string, string[]>)
       : {};
   const thamChieu = Array.isArray(body.thamChieu) ? (body.thamChieu as string[]) : [];
-  return new ApiError(res.status, title, errors, thamChieu);
+  return new ApiError(res.status, title, errors, thamChieu, rawBody);
 }
 
 async function request(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {

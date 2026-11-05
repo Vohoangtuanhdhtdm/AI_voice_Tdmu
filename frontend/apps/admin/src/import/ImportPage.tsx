@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Button, Select, Space, Table, Typography, Upload, message } from "antd";
 import { DownloadOutlined, InboxOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,27 +17,49 @@ export function ImportPage() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
 
+  // Mỗi lần chọn file/đổi loại tăng id; kết quả preview cũ bị bỏ qua.
+  const requestId = useRef(0);
+
+  const isPreview = (b: unknown): b is ImportPreview =>
+    !!b &&
+    typeof b === "object" &&
+    Array.isArray((b as ImportPreview).rows) &&
+    typeof (b as ImportPreview).errorCount === "number";
+
   const reset = () => {
+    requestId.current++;
     setFile(null);
     setPreview(null);
     setFileError(null);
   };
 
   const previewMut = useMutation({
-    mutationFn: (v: { k: ImportKind; f: File }) => previewImport(v.k, v.f),
-    onSuccess: setPreview,
-    onError: (e) => setFileError(errorText(e)),
+    mutationFn: (v: { k: ImportKind; f: File; id: number }) => previewImport(v.k, v.f),
+    onSuccess: (p, v) => {
+      if (v.id === requestId.current) setPreview(p);
+    },
+    onError: (e, v) => {
+      if (v.id === requestId.current) setFileError(errorText(e));
+    },
   });
 
   const commitMut = useMutation({
-    mutationFn: () => commitImport(kind, file!),
+    mutationFn: () => {
+      setFileError(null);
+      return commitImport(kind, file!);
+    },
     onSuccess: async (r) => {
       message.success(`Đã thêm ${r.inserted}, cập nhật ${r.updated} bản ghi trong bản nháp`);
       reset();
       await qc.invalidateQueries({ queryKey: ["kb"] });
     },
-    onError: (e) => setFileError(errorText(e)),
+    onError: (e) => {
+      setFileError(errorText(e));
+      if (e instanceof ApiError && e.status === 400 && isPreview(e.body)) setPreview(e.body);
+    },
   });
+
+  const busy = previewMut.isPending || commitMut.isPending;
 
   const pick = (f: File) => {
     reset();
@@ -46,7 +68,7 @@ export function ImportPage() {
       return;
     }
     setFile(f);
-    previewMut.mutate({ k: kind, f });
+    previewMut.mutate({ k: kind, f, id: requestId.current });
   };
 
   const download = async () => {
@@ -69,8 +91,8 @@ export function ImportPage() {
       title: "Lỗi",
       key: "errors",
       render: (_: unknown, r: ImportRow) =>
-        r.errors.map((e) => (
-          <div key={e}>
+        r.errors.map((e, i) => (
+          <div key={i}>
             <Typography.Text type="danger">{e}</Typography.Text>
           </div>
         )),
@@ -84,6 +106,7 @@ export function ImportPage() {
         <Select
           aria-label="Loại dữ liệu"
           value={kind}
+          disabled={busy}
           style={{ width: 220 }}
           options={(Object.keys(importKindLabels) as ImportKind[]).map((k) => ({
             value: k,
@@ -102,6 +125,7 @@ export function ImportPage() {
       <Upload.Dragger
         accept=".csv,.xlsx"
         multiple={false}
+        disabled={busy}
         showUploadList={false}
         beforeUpload={(f) => {
           pick(f);
@@ -131,7 +155,7 @@ export function ImportPage() {
           />
           <Button
             type="primary"
-            disabled={preview.errorCount !== 0}
+            disabled={!file || preview.errorCount > 0 || previewMut.isPending}
             loading={commitMut.isPending}
             onClick={() => commitMut.mutate()}
           >

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { server } from "../test/server";
 import { renderWithProviders } from "../test/render";
 import { authStore } from "../auth/authStore";
@@ -105,5 +105,41 @@ describe("ImportPage", () => {
     await waitFor(() => expect(auth).toBe("Bearer t"));
     await waitFor(() => expect(click).toHaveBeenCalled());
     click.mockRestore();
+  });
+
+  it("Stale_preview_ignored_after_kind_change", async () => {
+    server.use(
+      http.post("/api/admin/import/diem-chuan/preview", async () => {
+        await delay(300);
+        return HttpResponse.json(preview(0));
+      }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderWithProviders(<ImportPage />);
+    await user.upload(fileInput(), csv());
+    // Select bị khóa khi đang preview, nên đổi loại qua phím tắt không có hiệu lực: kiểm tra khóa.
+    expect(screen.getByRole("combobox", { name: "Loại dữ liệu" })).toBeDisabled();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(await screen.findByRole("button", { name: "Ghi vào bản nháp" })).toBeEnabled();
+  });
+
+  it("Commit_400_with_preview_body_shows_row_errors", async () => {
+    server.use(
+      http.post("/api/admin/import/diem-chuan/preview", () => HttpResponse.json(preview(0))),
+      http.post("/api/admin/import/diem-chuan/commit", () =>
+        HttpResponse.json({ ...preview(1), title: "File có dòng lỗi" }, { status: 400 }),
+      ),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderWithProviders(<ImportPage />);
+    await user.upload(fileInput(), csv());
+    const btn = await screen.findByRole("button", { name: "Ghi vào bản nháp" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    await user.click(btn);
+    expect(
+      await screen.findByText("Điểm không được vượt quá thang điểm của phương thức (30)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("File có dòng lỗi")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ghi vào bản nháp" })).toBeDisabled();
   });
 });
