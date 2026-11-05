@@ -13,3 +13,20 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test backend --configuration Release
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm -C frontend install --frozen-lockfile
+      - run: pnpm -C frontend typecheck
+      - run: pnpm -C frontend test
+      - run: pnpm -C frontend build
