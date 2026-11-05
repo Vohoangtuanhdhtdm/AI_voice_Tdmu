@@ -70,7 +70,9 @@ Test dùng Testcontainers nên **cần Docker đang chạy**; mỗi lần chạy
 cd backend
 ConnectionStrings__Default="Host=localhost;Port=5432;Database=tdmu_advisor;Username=postgres;Password=<POSTGRES_PASSWORD>" \
 Auth__JwtKey="<chuỗi tối thiểu 32 ký tự>" \
-dotnet ef migrations add <TenMigration> --project src/Tdmu.Advisor.Api
+dotnet ef migrations add <TenMigration> \
+  --project src/Tdmu.Advisor.Api --startup-project src/Tdmu.Advisor.Api \
+  -o Infrastructure/Migrations
 ```
 
 Migration được áp tự động khi chạy ở Development/Testing; xem lại file sinh ra trước khi commit.
