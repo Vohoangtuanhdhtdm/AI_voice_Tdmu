@@ -10,6 +10,7 @@ import { AdminLayout, NotFound } from "./layout/AdminLayout";
 import { KbEntityPage } from "./kb/KbEntityPage";
 import { entityConfigs } from "./kb/entityConfigs";
 import { ImportPage } from "./import/ImportPage";
+import { ReleasesPage } from "./releases/ReleasesPage";
 import { isKbSlug } from "./layout/navigation";
 
 dayjs.locale("vi");
@@ -33,7 +34,7 @@ export function AppRoutes() {
         <Route path="/" element={<Navigate to="/kb/nganh" replace />} />
         <Route path="/kb/:slug" element={<KbRoute />} />
         <Route path="/import" element={<ImportPage />} />
-        <Route path="/releases" element={<div>Xuất bản</div>} />
+        <Route path="/releases" element={<ReleasesPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
