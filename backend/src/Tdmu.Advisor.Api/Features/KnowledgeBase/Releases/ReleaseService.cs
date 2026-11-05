@@ -10,6 +10,9 @@ public class ReleaseService(AdvisorDbContext db, AuditSuppression suppression)
 {
     private const long LockKey = 727001;
 
+    /// <summary>Chỉ dùng cho test: chạy ngay sau khi xuất bản/khôi phục đã giữ khóa (transaction còn mở).</summary>
+    public Func<CancellationToken, Task>? AfterTablesLocked { get; set; }
+
     /// <summary>Thao tác trên một loại tri thức (gồm TaiLieu, TaiLieuChunk, không chỉ 10 loại có CRUD).</summary>
     private abstract class KbSet
     {
@@ -17,6 +20,7 @@ public class ReleaseService(AdvisorDbContext db, AuditSuppression suppression)
         public abstract Task<List<KbEntity>> LoadAsync(AdvisorDbContext db, Guid? releaseId, CancellationToken ct);
         public abstract Task DeleteDraftAsync(AdvisorDbContext db, CancellationToken ct);
         public abstract void Add(AdvisorDbContext db, IEnumerable<KbEntity> rows);
+        public abstract string TableName(AdvisorDbContext db);
     }
 
     private sealed class KbSet<T> : KbSet where T : KbEntity
@@ -27,6 +31,7 @@ public class ReleaseService(AdvisorDbContext db, AuditSuppression suppression)
         public override Task DeleteDraftAsync(AdvisorDbContext db, CancellationToken ct) =>
             db.Set<T>().Where(x => x.ReleaseId == null).ExecuteDeleteAsync(ct);
         public override void Add(AdvisorDbContext db, IEnumerable<KbEntity> rows) => db.Set<T>().AddRange(rows.Cast<T>());
+        public override string TableName(AdvisorDbContext db) => db.Model.FindEntityType(typeof(T))!.GetTableName()!;
     }
 
     private static readonly KbSet[] Sets =
@@ -65,6 +70,8 @@ public class ReleaseService(AdvisorDbContext db, AuditSuppression suppression)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await LockAsync(ct);
+        await LockTablesAsync("SHARE", ct);
+        if (AfterTablesLocked is { } hook) await hook(ct);
         var diff = await DiffAsync(ct); // Tính lại sau khi giữ khóa: yêu cầu đến sau sẽ thấy release vừa tạo.
         if (diff.Items.Count == 0) throw new NoChangesException();
 
@@ -101,6 +108,8 @@ public class ReleaseService(AdvisorDbContext db, AuditSuppression suppression)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await LockAsync(ct);
+        await LockTablesAsync("SHARE ROW EXCLUSIVE", ct);
+        if (AfterTablesLocked is { } hook) await hook(ct);
         var release = await db.Release.AsNoTracking().FirstOrDefaultAsync(r => r.Id == releaseId, ct) ?? throw new ReleaseNotFoundException();
         foreach (var set in Sets) await set.DeleteDraftAsync(db, ct);
         using (suppression.Begin()) // Không ghi audit từng dòng: chỉ một dòng "RestoredToDraft".
@@ -113,7 +122,27 @@ public class ReleaseService(AdvisorDbContext db, AuditSuppression suppression)
     }
 
     private Task LockAsync(CancellationToken ct) =>
-        db.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_xact_lock({LockKey})", ct);
+        db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({LockKey})", ct);
+
+    /// <summary>
+    /// Khóa cả 12 bảng tri thức tới hết transaction để bản chụp không bị lẫn giữa chừng (READ COMMITTED đọc mỗi câu lệnh một snapshot,
+    /// còn CRUD/import không lấy advisory lock). Gọi sau advisory lock nên chỉ một thao tác release giữ khóa bảng tại một thời điểm.
+    /// <list type="bullet">
+    /// <item>Xuất bản: SHARE — chặn mọi INSERT/UPDATE/DELETE của transaction khác (ROW EXCLUSIVE xung đột với SHARE) nhưng vẫn cho đọc;
+    /// chính transaction này vẫn chèn được bản sao release vì khóa của cùng một transaction không xung đột với nhau.</item>
+    /// <item>Khôi phục: SHARE ROW EXCLUSIVE — cũng chặn ghi từ nơi khác và cho đọc, đồng thời tự xung đột với chính nó, nên dù có hai
+    /// transaction cùng giữ khóa bảng thì cũng không thể cùng giữ SHARE rồi nâng lên ROW EXCLUSIVE (kiểu deadlock nâng khóa).
+    /// Transaction khôi phục tự xóa/chèn bản nháp mà không bị chặn bởi khóa của chính nó.</item>
+    /// </list>
+    /// Không có deadlock với CRUD/import: chúng chỉ ghi vào một bảng tri thức mỗi transaction (cộng audit_log, không nằm trong danh sách),
+    /// nên chỉ phải chờ, không giữ khóa nào mà transaction release cần sau đó.
+    /// </summary>
+    private Task LockTablesAsync(string mode, CancellationToken ct)
+    {
+        var tables = string.Join(", ", Sets.Select(s => "\"" + s.TableName(db) + "\""));
+        // Tên bảng lấy từ model EF và mode là hằng số trong lớp này, không có dữ liệu người dùng nên ghép chuỗi là an toàn.
+        return db.Database.ExecuteSqlRawAsync("LOCK TABLE " + tables + " IN " + mode + " MODE", ct);
+    }
 
     /// <summary>Tắt mọi release khác trước rồi bật release này (index unique một-active kiểm tra từng câu lệnh).</summary>
     private async Task SetActiveAsync(Guid releaseId, CancellationToken ct)
