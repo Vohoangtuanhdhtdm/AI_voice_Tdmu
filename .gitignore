@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .venv/
 prototype/gemini_live/out/
+.superpowers/
+bin/
+obj/
