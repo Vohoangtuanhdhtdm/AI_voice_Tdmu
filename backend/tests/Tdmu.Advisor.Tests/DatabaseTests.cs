@@ -25,6 +25,8 @@ public class DatabaseTests(ApiFactory f)
         using var scope = f.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AdvisorDbContext>();
         await db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO release (id, so_hieu, ghi_chu, tao_boi, tao_luc, is_active) VALUES (gen_random_uuid(), 1, '', 'x', now(), false)");
+        await db.Database.ExecuteSqlRawAsync(
             "INSERT INTO \"AspNetRoles\" (id, name, normalized_name) VALUES ('reset-test', 'ResetTest', 'RESETTEST') ON CONFLICT DO NOTHING");
 
         await f.ResetDatabaseAsync();
@@ -32,5 +34,7 @@ public class DatabaseTests(ApiFactory f)
         var count = await db.Database.SqlQueryRaw<int>(
             "SELECT count(*)::int AS \"Value\" FROM \"AspNetRoles\" WHERE id = 'reset-test'").SingleAsync();
         Assert.Equal(1, count);
+        var releases = await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM release").SingleAsync();
+        Assert.Equal(0, releases);
     }
 }

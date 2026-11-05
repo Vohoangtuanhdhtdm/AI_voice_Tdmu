@@ -34,21 +34,27 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await conn.OpenAsync();
         if (_respawner is null)
         {
-            try
+            var tables = await GetTablesToIgnoreAsync(conn);
+            if (!await HasResettableTablesAsync(conn, tables)) return; // Chưa có bảng nào để xóa; thử lại ở lần gọi sau.
+            _respawner = await Respawner.CreateAsync(conn, new RespawnerOptions
             {
-                _respawner = await Respawner.CreateAsync(conn, new RespawnerOptions
-                {
-                    DbAdapter = DbAdapter.Postgres,
-                    SchemasToInclude = ["public"],
-                    TablesToIgnore = await GetTablesToIgnoreAsync(conn),
-                });
-            }
-            catch (InvalidOperationException)
-            {
-                return; // Chưa có bảng nào để xóa (Respawn báo lỗi khi không tìm thấy bảng); thử lại ở lần gọi sau.
-            }
+                DbAdapter = DbAdapter.Postgres,
+                SchemasToInclude = ["public"],
+                TablesToIgnore = tables,
+            });
         }
         await _respawner.ResetAsync(conn);
+    }
+
+    private static async Task<bool> HasResettableTablesAsync(NpgsqlConnection conn, Table[] ignored)
+    {
+        var names = ignored.Select(t => t.Name).ToHashSet();
+        await using var cmd = new NpgsqlCommand(
+            "select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'", conn);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            if (!names.Contains(reader.GetString(0))) return true;
+        return false;
     }
 
     // Respawn không hỗ trợ wildcard, nên liệt kê các bảng AspNet* hiện có (IdentityDbContext đặt tên bảng tường minh, snake_case chỉ áp dụng cho cột, khóa, chỉ mục).
