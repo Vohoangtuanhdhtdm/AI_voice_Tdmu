@@ -128,6 +128,13 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
           />
         )}
       </Space>
+      {refs.isError && (
+        <Alert
+          type="error"
+          showIcon
+          message="Không tải được danh sách tham chiếu (ngành/phương thức/tổ hợp). Vui lòng tải lại trang."
+        />
+      )}
       {list.error && <Alert type="error" showIcon message="Không tải được dữ liệu" />}
       <Table
         rowKey={(r) => r.logicalId ?? JSON.stringify(r)}
@@ -138,7 +145,7 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
       />
       <Modal
         open={modal !== null}
-        title={modal?.row ? `Sửa: ${config.rowLabel(modal.row)}` : `Thêm mới: ${config.title}`}
+        title={modal?.row ? `Sửa: ${config.rowLabel(modal.row, refs.maps)}` : `Thêm mới: ${config.title}`}
         okText="Lưu"
         cancelText="Hủy"
         confirmLoading={create.isPending || update.isPending}

@@ -22,6 +22,8 @@ export function toFormValues(fields: FieldConfig[], row: Record<string, unknown>
 export function toRequestBody(fields: FieldConfig[], values: Record<string, unknown>): Record<string, unknown> {
   const body = { ...values };
   for (const f of fields) {
+    // Ô tham chiếu tùy chọn đã xóa -> null tường minh (không bỏ khỏi thân yêu cầu).
+    if (f.kind === "ref" && body[f.name] == null) body[f.name] = null;
     if (f.kind !== "datetime") continue;
     const v = body[f.name];
     body[f.name] = v && dayjs.isDayjs(v) ? dayjs.tz(v.format("YYYY-MM-DD HH:mm:ss"), VN_TZ).format() : null;

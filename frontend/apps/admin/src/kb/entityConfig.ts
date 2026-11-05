@@ -39,5 +39,5 @@ export interface EntityConfig<T> {
   yearFilter: boolean;
   fields: FieldConfig[];
   columns: ColumnConfig<T>[];
-  rowLabel(row: T): string;
+  rowLabel(row: T, refs?: RefMaps): string;
 }

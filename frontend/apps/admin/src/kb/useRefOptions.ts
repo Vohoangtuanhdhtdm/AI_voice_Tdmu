@@ -24,6 +24,7 @@ export function useRefOptions(kinds: readonly RefKind[] = KINDS) {
     "to-hop": useKbList("to-hop", undefined, { enabled: kinds.includes("to-hop") }),
   };
   const data = [q.nganh.data, q["phuong-thuc"].data, q["to-hop"].data];
+  const isError = KINDS.some((k) => kinds.includes(k) && q[k].isError);
   const isLoading = KINDS.some((k) => kinds.includes(k) && q[k].isLoading);
 
   return useMemo(() => {
@@ -40,6 +41,6 @@ export function useRefOptions(kinds: readonly RefKind[] = KINDS) {
         options[k].push({ value: r.logicalId, label: d.label });
       }
     }
-    return { maps, options, isLoading };
-  }, [...data, isLoading]);
+    return { maps, options, isLoading, isError };
+  }, [...data, isLoading, isError]);
 }

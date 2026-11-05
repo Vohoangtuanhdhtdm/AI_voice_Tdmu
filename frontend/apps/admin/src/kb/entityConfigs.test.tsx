@@ -166,6 +166,44 @@ describe("entity configs", () => {
     expect(posted!.batDau).toMatch(/^2026-07-01T08:00:00\+07:00$/);
   });
 
+  it("Ref_list_load_failure_shows_alert", async () => {
+    server.use(
+      json("/api/admin/kb/diem-chuan", []),
+      http.get("/api/admin/kb/nganh", () => HttpResponse.json({ title: "Lỗi" }, { status: 500 })),
+      json("/api/admin/kb/phuong-thuc", [PT]),
+    );
+    renderSlug("diem-chuan");
+    expect(
+      await screen.findByText("Không tải được danh sách tham chiếu (ngành/phương thức/tổ hợp). Vui lòng tải lại trang."),
+    ).toBeInTheDocument();
+  });
+
+  it("Cleared_optional_ref_is_sent_as_null", async () => {
+    let put: Record<string, unknown> | null = null;
+    server.use(
+      json("/api/admin/kb/hoc-phi", [
+        { logicalId: "h1", nganhLid: "n1", nam: 2026, muc: 1200000, donVi: "TinChi" },
+      ]),
+      json("/api/admin/kb/nganh", [NGANH]),
+      http.put("/api/admin/kb/hoc-phi/h1", async ({ request }) => {
+        put = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({});
+      }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderSlug("hoc-phi");
+    await user.click(await screen.findByRole("button", { name: "Sửa" }));
+    const dialog = await screen.findByRole("dialog", { hidden: true });
+    await within(dialog).findByText("7480201 – Công nghệ thông tin");
+    const field = within(dialog).getByText("Ngành").closest(".ant-form-item") as HTMLElement;
+    const sel = field.querySelector(".ant-select") as HTMLElement;
+    await user.hover(sel);
+    await user.click(field.querySelector(".ant-select-clear") as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Lưu" }));
+    expect(await screen.findByText("Đã lưu vào bản nháp")).toBeInTheDocument();
+    expect(put).toHaveProperty("nganhLid", null);
+  });
+
   it.each(KB_SLUGS)("All_ten_slugs_render: %s", async (slug) => {
     server.use(
       http.get("/api/admin/kb/:slug", () => HttpResponse.json([])),

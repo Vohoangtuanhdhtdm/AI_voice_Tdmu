@@ -126,7 +126,7 @@ const nganhToHop = define<NganhToHopDto & KbRow>({
     { title: "Năm", render: (r) => r.nam },
     { title: "Tổ hợp", render: (r, refs) => refName(refs, "to-hop", r.toHopLid) },
   ],
-  rowLabel: (r) => `${r.nam ?? ""}`,
+  rowLabel: (r, refs) => [refs && refName(refs, "nganh", r.nganhLid), refs && refName(refs, "to-hop", r.toHopLid), r.nam].filter(Boolean).join(" – "),
 });
 
 const diemChuan = define<DiemChuanDto & KbRow>({
@@ -148,7 +148,7 @@ const diemChuan = define<DiemChuanDto & KbRow>({
     { title: "Điểm", render: (r) => formatDecimal(r.diem) },
     { title: "Ghi chú", render: (r) => r.ghiChu },
   ],
-  rowLabel: (r) => `${r.nam ?? ""}`,
+  rowLabel: (r, refs) => [refs && refName(refs, "nganh", r.nganhLid), refs && refName(refs, "phuong-thuc", r.phuongThucLid), r.nam].filter(Boolean).join(" – "),
 });
 
 const chiTieu = define<ChiTieuDto & KbRow>({
@@ -168,7 +168,7 @@ const chiTieu = define<ChiTieuDto & KbRow>({
     { title: "Phương thức", render: (r, refs) => refName(refs, "phuong-thuc", r.phuongThucLid) },
     { title: "Số lượng", render: (r) => r.soLuong },
   ],
-  rowLabel: (r) => `${r.nam ?? ""}`,
+  rowLabel: (r, refs) => [refs && refName(refs, "nganh", r.nganhLid), refs && refName(refs, "phuong-thuc", r.phuongThucLid), r.nam].filter(Boolean).join(" – "),
 });
 
 const hocPhi = define<HocPhiDto & KbRow>({
@@ -190,7 +190,7 @@ const hocPhi = define<HocPhiDto & KbRow>({
     { title: "Đơn vị", render: (r) => DON_VI_HOC_PHI.find((o) => o.value === r.donVi)?.label ?? r.donVi },
     { title: "Ghi chú", render: (r) => r.ghiChu },
   ],
-  rowLabel: (r) => `${r.nam ?? ""}`,
+  rowLabel: (r, refs) => [(refs && refName(refs, "nganh", r.nganhLid)) || "Áp dụng chung", r.nam].filter(Boolean).join(" – "),
 });
 
 const mocThoiGian = define<MocThoiGianDto & KbRow>({
