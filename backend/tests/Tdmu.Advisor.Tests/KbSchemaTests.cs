@@ -102,7 +102,7 @@ public class KbSchemaTests(ApiFactory f)
         Assert.Equal(DonViHocPhi.TinChi, (await db2.HocPhi.SingleAsync()).DonVi);
         Assert.Equal(TrangThaiTaiLieu.ChoXuLy, (await db2.TaiLieu.SingleAsync()).TrangThai);
         Assert.Equal(768, (await db2.Faq.SingleAsync()).Embedding!.ToArray().Length);
-        Assert.Equal("{\"a\": 1}", (await db2.AuditLog.SingleAsync()).AfterJson);
+        Assert.Equal("{\"a\": 1}", (await db2.AuditLog.SingleAsync(a => a.Entity == "nganh")).AfterJson);
     }
 
     [Fact]

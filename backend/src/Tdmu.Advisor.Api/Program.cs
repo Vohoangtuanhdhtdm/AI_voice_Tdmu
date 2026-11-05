@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using Tdmu.Advisor.Api.Infrastructure;
 using Tdmu.Advisor.Api.Infrastructure.Auditing;
 using Tdmu.Advisor.Api.Infrastructure.Auth;
@@ -11,9 +12,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
 builder.Services.AddScoped<AuditInterceptor>();
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(builder.Configuration.GetConnectionString("Default"));
+dataSourceBuilder.UseVector();
+var dataSource = dataSourceBuilder.Build();
+builder.Services.AddSingleton(dataSource);
 builder.Services.AddDbContext<AdvisorDbContext>((sp, o) => o
     .AddInterceptors(sp.GetRequiredService<AuditInterceptor>())
-    .UseNpgsql(builder.Configuration.GetConnectionString("Default"), npgsql => npgsql.UseVector())
+    .UseNpgsql(dataSource, npgsql => npgsql.UseVector())
     .UseSnakeCaseNamingConvention());
 
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.Section));
