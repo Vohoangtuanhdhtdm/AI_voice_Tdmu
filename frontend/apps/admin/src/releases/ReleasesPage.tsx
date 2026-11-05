@@ -64,6 +64,7 @@ export function ReleasesPage() {
       if (e instanceof ApiError && e.status === 409) {
         message.info(e.title);
         setOpen(false);
+        form.resetFields();
       } else {
         message.error(errorText(e));
       }
@@ -168,7 +169,11 @@ export function ReleasesPage() {
         open={open}
         confirmLoading={publish.isPending}
         onOk={submit}
-        onCancel={() => !publish.isPending && setOpen(false)}
+        onCancel={() => {
+          if (publish.isPending) return;
+          setOpen(false);
+          form.resetFields();
+        }}
         cancelButtonProps={{ disabled: publish.isPending }}
         forceRender
       >

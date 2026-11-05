@@ -75,7 +75,13 @@ describe("ReleasesPage", () => {
   });
 
   it("Publish_without_changes_shows_info", async () => {
-    mockGets([added]);
+    let diffCalls = 0;
+    server.use(
+      http.get("/api/admin/releases/diff", () =>
+        HttpResponse.json({ items: diffCalls++ === 0 ? [added] : [] }),
+      ),
+      http.get("/api/admin/releases", () => HttpResponse.json(releases)),
+    );
     server.use(
       http.post("/api/admin/releases", () =>
         HttpResponse.json({ title: "Không có thay đổi để xuất bản" }, { status: 409 }),
@@ -89,6 +95,8 @@ describe("ReleasesPage", () => {
     await user.type(within(dialog).getByLabelText("Ghi chú"), "x");
     await user.click(within(dialog).getByRole("button", { name: "Đồng ý" }));
     expect(await screen.findByText("Không có thay đổi để xuất bản")).toBeInTheDocument();
+    expect(await screen.findByText("Bản nháp trùng với bản đang phát hành")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Xuất bản" })).toBeDisabled();
     expect(screen.getByText("Lịch sử phát hành")).toBeInTheDocument();
     expect(screen.getByText("Bản cũ")).toBeInTheDocument();
   });

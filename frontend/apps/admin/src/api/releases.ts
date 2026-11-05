@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./client";
+import { ApiError, apiFetch } from "./client";
 import type { DiffItem, Release, ReleaseDiff } from "./types";
 
 const base = "/api/admin/releases";
@@ -30,6 +30,10 @@ export function usePublish() {
   return useMutation({
     mutationFn: (ghiChu: string) => apiFetch<Release>(base, { method: "POST", json: { ghiChu } }),
     onSuccess: invalidate,
+    // 409: bản nháp thực ra không còn thay đổi; làm mới để trang phản ánh đúng.
+    onError: (e) => {
+      if (e instanceof ApiError && e.status === 409) void invalidate();
+    },
   });
 }
 
