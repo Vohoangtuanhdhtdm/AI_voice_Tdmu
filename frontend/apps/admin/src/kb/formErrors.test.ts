@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FormInstance } from "antd";
 import { ApiError } from "../api/client";
-import { applyApiErrorToForm } from "./formErrors";
+import { applyApiErrorToForm, unmatchedFieldMessages } from "./formErrors";
 
 const fakeForm = () => {
   const setFields = vi.fn();
@@ -24,5 +24,13 @@ describe("applyApiErrorToForm", () => {
     expect(applyApiErrorToForm(form, new ApiError(409, "x", { a: ["b"] }))).toBe(false);
     expect(applyApiErrorToForm(form, new Error("x"))).toBe(false);
     expect(setFields).not.toHaveBeenCalled();
+  });
+
+  it("applies only known fields and reports the unmatched messages", () => {
+    const { form, setFields } = fakeForm();
+    const err = new ApiError(400, "x", { ma: ["c"], nguonUrl: ["URL không hợp lệ"] });
+    expect(applyApiErrorToForm(form, err, ["ma"])).toBe(true);
+    expect(setFields).toHaveBeenCalledWith([{ name: "ma", errors: ["c"] }]);
+    expect(unmatchedFieldMessages(err, ["ma"])).toEqual(["URL không hợp lệ"]);
   });
 });

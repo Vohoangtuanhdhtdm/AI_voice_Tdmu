@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Form, Input, InputNumber, Select, Switch, type FormInstance } from "antd";
+import { parseViNumber } from "../format";
 import type { FieldConfig } from "./entityConfig";
 
 /** Tạo control nhập cho một field. `ref` và `datetime` sẽ được bổ sung ở Task 6. */
@@ -12,7 +13,14 @@ export function renderField(field: FieldConfig): ReactNode {
     case "int":
       return <InputNumber precision={0} style={{ width: "100%" }} />;
     case "decimal":
-      return <InputNumber precision={field.precision} decimalSeparator="," style={{ width: "100%" }} />;
+      return (
+        <InputNumber<number>
+          precision={field.precision}
+          style={{ width: "100%" }}
+          formatter={(v, info) => (info.userTyping ? info.input : String(v ?? "").replace(".", ","))}
+          parser={(s) => parseViNumber(s ?? "") ?? NaN}
+        />
+      );
     case "money":
       return (
         <InputNumber<number>
@@ -20,7 +28,11 @@ export function renderField(field: FieldConfig): ReactNode {
           min={0}
           style={{ width: "100%" }}
           formatter={(v) => String(v ?? "").replace(/\B(?=(\d{3})+(?!\d))/g, ".")}
-          parser={(s) => Number((s ?? "").replace(/\D/g, ""))}
+          // Ô trống -> null (không ép về 0) để bắt buộc/tùy chọn hoạt động đúng.
+          parser={(s) => {
+            const digits = (s ?? "").replace(/\D/g, "");
+            return (digits === "" ? null : Number(digits)) as unknown as number;
+          }}
         />
       );
     case "bool":

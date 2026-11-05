@@ -4,7 +4,7 @@ import { ApiError } from "../api/client";
 import { useKbCreate, useKbDelete, useKbList, useKbUpdate, type KbRow } from "../api/kb";
 import type { EntityConfig, RefMaps } from "./entityConfig";
 import { KbEntityForm } from "./KbEntityForm";
-import { applyApiErrorToForm } from "./formErrors";
+import { applyApiErrorToForm, unmatchedFieldMessages } from "./formErrors";
 
 // Task 6 sẽ nạp dữ liệu thật cho các cột kiểu tham chiếu.
 const EMPTY_REFS: RefMaps = { nganh: new Map(), "phuong-thuc": new Map(), "to-hop": new Map() };
@@ -42,8 +42,12 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
       message.success("Đã lưu vào bản nháp");
       close();
     } catch (err) {
-      if (applyApiErrorToForm(form, err)) return;
-      message.error(err instanceof ApiError ? err.title : "Có lỗi xảy ra");
+      const names = config.fields.map((f) => f.name);
+      const applied = applyApiErrorToForm(form, err, names);
+      const extra = unmatchedFieldMessages(err, names);
+      if (applied && extra.length === 0) return;
+      const title = err instanceof ApiError ? err.title : "Có lỗi xảy ra";
+      message.error([title, ...extra].join(": "));
     }
   };
 
