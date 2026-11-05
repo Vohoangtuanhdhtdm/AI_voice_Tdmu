@@ -41,6 +41,24 @@ public class AuthTests(ApiFactory f)
     }
 
     [Fact]
+    public async Task Non_admin_token_returns_403()
+    {
+        var email = $"user-{Guid.NewGuid():N}@test.local";
+        const string password = "User#Pass123";
+        using (var scope = f.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+            Assert.True((await users.CreateAsync(new IdentityUser { UserName = email, Email = email }, password)).Succeeded);
+        }
+        var client = f.CreateClient();
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var token = (await login.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accessToken").GetString();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/admin/ping")).StatusCode);
+    }
+
+    [Fact]
     public async Task Five_wrong_passwords_lock_account()
     {
         // Dùng user riêng để không khóa admin seed của các test khác.

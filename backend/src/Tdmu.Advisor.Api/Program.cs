@@ -53,7 +53,8 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
     using var scope = app.Services.CreateScope();
     await scope.ServiceProvider.GetRequiredService<AdvisorDbContext>().Database.MigrateAsync();
 }
-await AdminSeeder.SeedAsync(app.Services.CreateScope().ServiceProvider);
+using (var seedScope = app.Services.CreateScope())
+    await AdminSeeder.SeedAsync(seedScope.ServiceProvider);
 
 app.UseAuthentication();
 app.UseAuthorization();
