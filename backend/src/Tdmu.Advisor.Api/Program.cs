@@ -18,6 +18,7 @@ builder.Services.AddScoped<AuditSuppression>();
 builder.Services.AddScoped<AuditInterceptor>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Releases.ReleaseService>();
 builder.Services.AddScoped<IKnowledgeQuery, KnowledgeQuery>();
+builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Import.ImportService>();
 var permits = builder.Configuration.GetValue<int?>("RateLimit:PublicPermitsPerMinute") ?? 60;
 builder.Services.AddRateLimiter(o =>
 {

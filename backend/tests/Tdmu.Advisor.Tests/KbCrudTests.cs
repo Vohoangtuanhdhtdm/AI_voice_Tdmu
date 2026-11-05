@@ -185,4 +185,39 @@ public class KbCrudTests(ApiFactory f)
         var res = await f.CreateClient().GetAsync("/api/admin/kb/nganh");
         Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
     }
+
+    [Fact]
+    public async Task Diem_chuan_missing_diem_returns_400_on_diem()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var n = await Nganh(c);
+        var pt = await PhuongThuc(c, "thi-thpt", "Thi THPT", 30);
+        var res = await c.PostAsJsonAsync("/api/admin/kb/diem-chuan", new { nganhLid = n, nam = 2026, phuongThucLid = pt });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.True((await Json(res)).GetProperty("errors").TryGetProperty("diem", out _));
+    }
+
+    [Fact]
+    public async Task Hoc_phi_missing_don_vi_returns_400()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var res = await c.PostAsJsonAsync("/api/admin/kb/hoc-phi", new { nam = 2026, muc = 500000 });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.True((await Json(res)).GetProperty("errors").TryGetProperty("donVi", out _));
+    }
+
+    [Fact]
+    public async Task Chi_tieu_missing_so_luong_and_nam_return_400()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var n = await Nganh(c);
+        var res = await c.PostAsJsonAsync("/api/admin/kb/chi-tieu", new { nganhLid = n });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        var errs = (await Json(res)).GetProperty("errors");
+        Assert.True(errs.TryGetProperty("soLuong", out _));
+        Assert.True(errs.TryGetProperty("nam", out _));
+    }
 }

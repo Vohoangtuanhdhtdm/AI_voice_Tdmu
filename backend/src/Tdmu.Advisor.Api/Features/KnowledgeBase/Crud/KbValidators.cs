@@ -24,9 +24,15 @@ public static partial class KbValidators
     [GeneratedRegex("^[A-Z][0-9]{2}$")]
     private static partial Regex ToHopMaRegex();
 
-    public static void Nam(KbErrors e, int nam, string field = "nam")
+    public static void Required<T>(KbErrors e, T? value, string field, string label) where T : struct
     {
-        if (nam is < 2000 or > 2100) e.Add(field, "Năm phải nằm trong khoảng 2000–2100");
+        if (value is null) e.Add(field, $"{label} là bắt buộc");
+    }
+
+    public static void Nam(KbErrors e, int? nam, string field = "nam")
+    {
+        if (nam is null) e.Add(field, "Năm là bắt buộc");
+        else if (nam is < 2000 or > 2100) e.Add(field, "Năm phải nằm trong khoảng 2000–2100");
     }
 
     public static void NotEmpty(KbErrors e, string? value, string field, string label)
@@ -34,9 +40,10 @@ public static partial class KbValidators
         if (string.IsNullOrWhiteSpace(value)) e.Add(field, $"{label} không được để trống");
     }
 
-    public static void Positive(KbErrors e, decimal value, string field, string label)
+    public static void Positive(KbErrors e, decimal? value, string field, string label)
     {
-        if (value <= 0) e.Add(field, $"{label} phải lớn hơn 0");
+        if (value is null) e.Add(field, $"{label} là bắt buộc");
+        else if (value <= 0) e.Add(field, $"{label} phải lớn hơn 0");
     }
 
     public static void ToHopMa(KbErrors e, string? ma)
@@ -58,9 +65,10 @@ public static partial class KbValidators
         return row;
     }
 
-    public static void Diem(KbErrors e, decimal diem, PhuongThuc? phuongThuc)
+    public static void Diem(KbErrors e, decimal? diem, PhuongThuc? phuongThuc)
     {
-        if (diem < 0) e.Add("diem", "Điểm phải lớn hơn hoặc bằng 0");
+        if (diem is null) e.Add("diem", "Điểm là bắt buộc");
+        else if (diem < 0) e.Add("diem", "Điểm phải lớn hơn hoặc bằng 0");
         else if (phuongThuc is not null && diem > phuongThuc.ThangDiem)
             e.Add("diem", $"Điểm không được vượt quá thang điểm của phương thức ({phuongThuc.ThangDiem:0.##})");
     }

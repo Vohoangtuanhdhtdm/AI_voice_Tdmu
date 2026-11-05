@@ -6,15 +6,15 @@ using Tdmu.Advisor.Api.Infrastructure;
 
 namespace Tdmu.Advisor.Api.Features.KnowledgeBase.Crud;
 
-public record MuaTuyenSinhDto(Guid? LogicalId, int Nam, bool LaHienTai, string? NguonTen, string? NguonUrl);
+public record MuaTuyenSinhDto(Guid? LogicalId, int? Nam, bool LaHienTai, string? NguonTen, string? NguonUrl);
 public record NganhDto(Guid? LogicalId, string? MaNganh, string? Ten, List<string>? TenGoiKhac, string? DonVi, string? MoTaNgan, bool? ConTuyen, string? NguonTen, string? NguonUrl);
 public record PhuongThucDto(Guid? LogicalId, string? Ma, string? Ten, string? MoTa, decimal? ThangDiem, string? NguonTen, string? NguonUrl);
 public record ToHopDto(Guid? LogicalId, string? Ma, List<string>? Mon, string? CachDoc, string? NguonTen, string? NguonUrl);
-public record NganhToHopDto(Guid? LogicalId, Guid? NganhLid, int Nam, Guid? ToHopLid, string? NguonTen, string? NguonUrl);
-public record DiemChuanDto(Guid? LogicalId, Guid? NganhLid, int Nam, Guid? PhuongThucLid, decimal Diem, string? GhiChu, string? NguonTen, string? NguonUrl);
-public record ChiTieuDto(Guid? LogicalId, Guid? NganhLid, int Nam, Guid? PhuongThucLid, int SoLuong, string? NguonTen, string? NguonUrl);
-public record HocPhiDto(Guid? LogicalId, Guid? NganhLid, int Nam, decimal Muc, [property: JsonConverter(typeof(JsonStringEnumConverter))] DonViHocPhi DonVi, string? GhiChu, string? NguonTen, string? NguonUrl);
-public record MocThoiGianDto(Guid? LogicalId, int Nam, string? TenMoc, DateTimeOffset BatDau, DateTimeOffset? KetThuc, Guid? PhuongThucLid, string? MoTa, string? NguonTen, string? NguonUrl);
+public record NganhToHopDto(Guid? LogicalId, Guid? NganhLid, int? Nam, Guid? ToHopLid, string? NguonTen, string? NguonUrl);
+public record DiemChuanDto(Guid? LogicalId, Guid? NganhLid, int? Nam, Guid? PhuongThucLid, decimal? Diem, string? GhiChu, string? NguonTen, string? NguonUrl);
+public record ChiTieuDto(Guid? LogicalId, Guid? NganhLid, int? Nam, Guid? PhuongThucLid, int? SoLuong, string? NguonTen, string? NguonUrl);
+public record HocPhiDto(Guid? LogicalId, Guid? NganhLid, int? Nam, decimal? Muc, [property: JsonConverter(typeof(JsonStringEnumConverter))] DonViHocPhi? DonVi, string? GhiChu, string? NguonTen, string? NguonUrl);
+public record MocThoiGianDto(Guid? LogicalId, int? Nam, string? TenMoc, DateTimeOffset? BatDau, DateTimeOffset? KetThuc, Guid? PhuongThucLid, string? MoTa, string? NguonTen, string? NguonUrl);
 public record FaqDto(Guid? LogicalId, string? CauHoi, List<string>? CachHoiKhac, string? TraLoi, string? ChuDe, string? NguonTen, string? NguonUrl);
 
 /// <summary>Phần không phụ thuộc kiểu của một định nghĩa, để Task 7 (release) duyệt qua mọi loại tri thức.</summary>
@@ -52,7 +52,7 @@ public static class KbEntityDefinitions
 {
     public static readonly KbEntityDefinition<MuaTuyenSinh, MuaTuyenSinhDto> MuaTuyenSinh = new("mua-tuyen-sinh",
         e => new(e.LogicalId, e.Nam, e.LaHienTai, e.NguonTen, e.NguonUrl),
-        (d, e) => { e.Nam = d.Nam; e.LaHienTai = d.LaHienTai; Src(d.NguonTen, d.NguonUrl, e); },
+        (d, e) => { e.Nam = d.Nam!.Value; e.LaHienTai = d.LaHienTai; Src(d.NguonTen, d.NguonUrl, e); },
         (d, _, _) => { var er = new KbErrors(); KbValidators.Nam(er, d.Nam); return Task.FromResult(er); },
         n => x => x.Nam == n);
 
@@ -95,7 +95,7 @@ public static class KbEntityDefinitions
 
     public static readonly KbEntityDefinition<NganhToHop, NganhToHopDto> NganhToHop = new("nganh-to-hop",
         e => new(e.LogicalId, e.NganhLid, e.Nam, e.ToHopLid, e.NguonTen, e.NguonUrl),
-        (d, e) => { e.NganhLid = d.NganhLid!.Value; e.Nam = d.Nam; e.ToHopLid = d.ToHopLid!.Value; Src(d.NguonTen, d.NguonUrl, e); },
+        (d, e) => { e.NganhLid = d.NganhLid!.Value; e.Nam = d.Nam!.Value; e.ToHopLid = d.ToHopLid!.Value; Src(d.NguonTen, d.NguonUrl, e); },
         async (d, db, ct) =>
         {
             var er = new KbErrors();
@@ -108,7 +108,7 @@ public static class KbEntityDefinitions
 
     public static readonly KbEntityDefinition<DiemChuan, DiemChuanDto> DiemChuan = new("diem-chuan",
         e => new(e.LogicalId, e.NganhLid, e.Nam, e.PhuongThucLid, e.Diem, e.GhiChu, e.NguonTen, e.NguonUrl),
-        (d, e) => { e.NganhLid = d.NganhLid!.Value; e.Nam = d.Nam; e.PhuongThucLid = d.PhuongThucLid!.Value; e.Diem = d.Diem; e.GhiChu = d.GhiChu; Src(d.NguonTen, d.NguonUrl, e); },
+        (d, e) => { e.NganhLid = d.NganhLid!.Value; e.Nam = d.Nam!.Value; e.PhuongThucLid = d.PhuongThucLid!.Value; e.Diem = d.Diem!.Value; e.GhiChu = d.GhiChu; Src(d.NguonTen, d.NguonUrl, e); },
         async (d, db, ct) =>
         {
             var er = new KbErrors();
@@ -122,7 +122,7 @@ public static class KbEntityDefinitions
 
     public static readonly KbEntityDefinition<ChiTieu, ChiTieuDto> ChiTieu = new("chi-tieu",
         e => new(e.LogicalId, e.NganhLid, e.Nam, e.PhuongThucLid, e.SoLuong, e.NguonTen, e.NguonUrl),
-        (d, e) => { e.NganhLid = d.NganhLid!.Value; e.Nam = d.Nam; e.PhuongThucLid = d.PhuongThucLid; e.SoLuong = d.SoLuong; Src(d.NguonTen, d.NguonUrl, e); },
+        (d, e) => { e.NganhLid = d.NganhLid!.Value; e.Nam = d.Nam!.Value; e.PhuongThucLid = d.PhuongThucLid; e.SoLuong = d.SoLuong!.Value; Src(d.NguonTen, d.NguonUrl, e); },
         async (d, db, ct) =>
         {
             var er = new KbErrors();
@@ -136,12 +136,13 @@ public static class KbEntityDefinitions
 
     public static readonly KbEntityDefinition<HocPhi, HocPhiDto> HocPhi = new("hoc-phi",
         e => new(e.LogicalId, e.NganhLid, e.Nam, e.Muc, e.DonVi, e.GhiChu, e.NguonTen, e.NguonUrl),
-        (d, e) => { e.NganhLid = d.NganhLid; e.Nam = d.Nam; e.Muc = d.Muc; e.DonVi = d.DonVi; e.GhiChu = d.GhiChu; Src(d.NguonTen, d.NguonUrl, e); },
+        (d, e) => { e.NganhLid = d.NganhLid; e.Nam = d.Nam!.Value; e.Muc = d.Muc!.Value; e.DonVi = d.DonVi!.Value; e.GhiChu = d.GhiChu; Src(d.NguonTen, d.NguonUrl, e); },
         async (d, db, ct) =>
         {
             var er = new KbErrors();
             KbValidators.Nam(er, d.Nam);
             KbValidators.Positive(er, d.Muc, "muc", "Mức học phí");
+            KbValidators.Required(er, d.DonVi, "donVi", "Đơn vị học phí");
             await KbValidators.RefAsync<Nganh>(er, db, d.NganhLid, "nganhLid", "Ngành", ct, required: false);
             return er;
         },
@@ -149,12 +150,13 @@ public static class KbEntityDefinitions
 
     public static readonly KbEntityDefinition<MocThoiGian, MocThoiGianDto> MocThoiGian = new("moc-thoi-gian",
         e => new(e.LogicalId, e.Nam, e.TenMoc, e.BatDau, e.KetThuc, e.PhuongThucLid, e.MoTa, e.NguonTen, e.NguonUrl),
-        (d, e) => { e.Nam = d.Nam; e.TenMoc = d.TenMoc!.Trim(); e.BatDau = d.BatDau; e.KetThuc = d.KetThuc; e.PhuongThucLid = d.PhuongThucLid; e.MoTa = d.MoTa; Src(d.NguonTen, d.NguonUrl, e); },
+        (d, e) => { e.Nam = d.Nam!.Value; e.TenMoc = d.TenMoc!.Trim(); e.BatDau = d.BatDau!.Value; e.KetThuc = d.KetThuc; e.PhuongThucLid = d.PhuongThucLid; e.MoTa = d.MoTa; Src(d.NguonTen, d.NguonUrl, e); },
         async (d, db, ct) =>
         {
             var er = new KbErrors();
             KbValidators.Nam(er, d.Nam);
             KbValidators.NotEmpty(er, d.TenMoc, "tenMoc", "Tên mốc");
+            KbValidators.Required(er, d.BatDau, "batDau", "Thời điểm bắt đầu");
             await KbValidators.RefAsync<PhuongThuc>(er, db, d.PhuongThucLid, "phuongThucLid", "Phương thức", ct, required: false);
             return er;
         },
