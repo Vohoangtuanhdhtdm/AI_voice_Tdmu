@@ -61,4 +61,12 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm -C frontend install --frozen-lockfile
       - run: pnpm -C frontend/apps/admin exec playwright install --with-deps chromium
+      # Build trước để thời gian biên dịch backend không ăn vào timeout khởi động webServer của Playwright.
+      - run: dotnet build backend
       - run: pnpm -C frontend/apps/admin e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-test-results
+          path: frontend/apps/admin/test-results
+          if-no-files-found: ignore
