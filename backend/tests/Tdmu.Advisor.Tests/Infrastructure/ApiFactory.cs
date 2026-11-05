@@ -11,6 +11,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _db = new PostgreSqlBuilder("pgvector/pgvector:pg16").Build();
 
+    public const string TestJwtKey = "test-only-jwt-signing-key-0123456789-abcdef";
+    public const string AdminEmail = "admin@test.local";
+    public const string AdminPassword = "Admin#Test123";
+
     private Respawner? _respawner;
 
     public async Task InitializeAsync() => await _db.StartAsync();
@@ -25,6 +29,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:Default", _db.GetConnectionString());
+        builder.UseSetting("Auth:JwtKey", TestJwtKey);
+        builder.UseSetting("Auth:SeedAdminEmail", AdminEmail);
+        builder.UseSetting("Auth:SeedAdminPassword", AdminPassword);
     }
 
     /// <summary>Xóa dữ liệu mọi bảng (trừ lịch sử migration và bảng Identity). Respawner tạo lười vì ở Task 1 chưa có bảng nào.</summary>
