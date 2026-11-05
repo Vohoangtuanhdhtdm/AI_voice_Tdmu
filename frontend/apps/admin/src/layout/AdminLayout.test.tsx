@@ -18,7 +18,7 @@ function Where() {
 }
 
 function renderAuthed(route: string) {
-  server.use(http.get("/api/admin/kb/nganh", () => HttpResponse.json([])));
+  server.use(http.get("/api/admin/kb/:slug", () => HttpResponse.json([])));
   authStore.setSession({ accessToken: "t", expiresAt: new Date(Date.now() + 3600_000).toISOString() });
   return renderWithProviders(
     <>

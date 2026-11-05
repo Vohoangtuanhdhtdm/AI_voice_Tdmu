@@ -8,8 +8,9 @@ export interface KbRow {
 
 const base = (slug: string) => `/api/admin/kb/${slug}`;
 
-export function useKbList(slug: string, nam?: number) {
+export function useKbList(slug: string, nam?: number, opts: { enabled?: boolean } = {}) {
   return useQuery({
+    enabled: opts.enabled ?? true,
     queryKey: ["kb", slug, { nam: nam ?? null }],
     queryFn: () => apiFetch<KbRow[]>(nam == null ? base(slug) : `${base(slug)}?nam=${nam}`),
   });

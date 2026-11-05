@@ -6,7 +6,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/vi";
 import { LoginPage } from "./auth/LoginPage";
 import { RequireAuth } from "./auth/RequireAuth";
-import { AdminLayout, KbPlaceholder, NotFound } from "./layout/AdminLayout";
+import { AdminLayout, NotFound } from "./layout/AdminLayout";
 import { KbEntityPage } from "./kb/KbEntityPage";
 import { entityConfigs } from "./kb/entityConfigs";
 import { isKbSlug } from "./layout/navigation";
@@ -21,7 +21,7 @@ function KbRoute() {
   const { slug } = useParams();
   const config = isKbSlug(slug) ? entityConfigs[slug] : undefined;
   // key buộc dựng lại trang (và reset state) khi đổi slug.
-  return config ? <KbEntityPage key={slug} config={config} /> : <KbPlaceholder />;
+  return config ? <KbEntityPage key={slug} config={config} /> : <NotFound />;
 }
 
 export function AppRoutes() {

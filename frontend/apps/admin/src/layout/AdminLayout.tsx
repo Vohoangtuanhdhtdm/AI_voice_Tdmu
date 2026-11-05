@@ -1,7 +1,7 @@
 import { Button, Layout, Menu, Typography, type MenuProps } from "antd";
-import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authStore";
-import { KB_MENU_GROUPS, KB_TITLES, KB_UNGROUPED, isKbSlug, type KbSlug } from "./navigation";
+import { KB_MENU_GROUPS, KB_TITLES, KB_UNGROUPED, type KbSlug } from "./navigation";
 
 const kbItem = (slug: KbSlug) => ({
   key: `/kb/${slug}`,
@@ -50,11 +50,6 @@ export function AdminLayout() {
       </Layout>
     </Layout>
   );
-}
-
-export function KbPlaceholder() {
-  const { slug } = useParams();
-  return isKbSlug(slug) ? <div>{slug}</div> : <NotFound />;
 }
 
 export function NotFound() {

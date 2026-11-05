@@ -5,6 +5,9 @@ interface FieldBase {
   name: string;
   label: string;
   required?: boolean;
+  /** Giá trị mặc định khi thêm mới. */
+  defaultValue?: unknown;
+  placeholder?: string;
 }
 
 export type RefKind = "nganh" | "phuong-thuc" | "to-hop";
@@ -20,6 +23,8 @@ export type FieldConfig =
   | (FieldBase & { kind: "enum"; options: { value: string; label: string }[] })
   | (FieldBase & { kind: "ref"; ref: RefKind })
   | (FieldBase & { kind: "datetime" });
+
+export type RefOptions = Record<RefKind, { value: string; label: string }[]>;
 
 export type RefMaps = Record<RefKind, Map<string, string>>;
 

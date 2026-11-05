@@ -2,12 +2,11 @@ import { useMemo, useState } from "react";
 import { Alert, Button, Form, Modal, Popconfirm, Select, Space, Table, Typography, message } from "antd";
 import { ApiError } from "../api/client";
 import { useKbCreate, useKbDelete, useKbList, useKbUpdate, type KbRow } from "../api/kb";
-import type { EntityConfig, RefMaps } from "./entityConfig";
+import type { EntityConfig, RefKind } from "./entityConfig";
+import { toFormValues, toRequestBody } from "./formValues";
+import { useRefOptions } from "./useRefOptions";
 import { KbEntityForm } from "./KbEntityForm";
 import { applyApiErrorToForm, unmatchedFieldMessages } from "./formErrors";
-
-// Task 6 sẽ nạp dữ liệu thật cho các cột kiểu tham chiếu.
-const EMPTY_REFS: RefMaps = { nganh: new Map(), "phuong-thuc": new Map(), "to-hop": new Map() };
 
 const ALL = "all";
 
@@ -17,6 +16,11 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
   const create = useKbCreate(slug);
   const update = useKbUpdate(slug);
   const del = useKbDelete(slug);
+  const refKinds = useMemo(
+    () => [...new Set(config.fields.flatMap((f) => (f.kind === "ref" ? [f.ref] : [])))] as RefKind[],
+    [config],
+  );
+  const refs = useRefOptions(refKinds);
   const [form] = Form.useForm();
   const [modal, setModal] = useState<{ row: KbRow | null } | null>(null);
   const [year, setYear] = useState<string | number>(ALL);
@@ -32,12 +36,13 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
 
   const save = async (values: Record<string, unknown>) => {
     const editing = modal?.row ?? null;
+    const payload = toRequestBody(config.fields, values);
     try {
       if (editing?.logicalId) {
         const { logicalId, ...rest } = editing;
-        await update.mutateAsync({ logicalId, body: { ...rest, ...values } });
+        await update.mutateAsync({ logicalId, body: { ...rest, ...payload } });
       } else {
-        await create.mutateAsync(values);
+        await create.mutateAsync(payload);
       }
       message.success("Đã lưu vào bản nháp");
       close();
@@ -78,7 +83,7 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
     ...config.columns.map((c) => ({
       title: c.title,
       key: c.title,
-      render: (_: unknown, row: KbRow) => c.render(row, EMPTY_REFS),
+      render: (_: unknown, row: KbRow) => c.render(row, refs.maps),
     })),
     {
       title: "Thao tác",
@@ -146,7 +151,8 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
           <KbEntityForm
             form={form}
             fields={config.fields}
-            initialValues={modal.row ?? undefined}
+            initialValues={toFormValues(config.fields, modal.row)}
+            refOptions={refs.options}
             onFinish={save}
           />
         )}

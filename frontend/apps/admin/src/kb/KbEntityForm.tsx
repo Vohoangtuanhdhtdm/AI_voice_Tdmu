@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { Form, Input, InputNumber, Select, Switch, type FormInstance } from "antd";
+import { DatePicker, Form, Input, InputNumber, Select, Switch, type FormInstance } from "antd";
 import { parseViNumber } from "../format";
-import type { FieldConfig } from "./entityConfig";
+import type { FieldConfig, RefOptions } from "./entityConfig";
 
-/** Tạo control nhập cho một field. `ref` và `datetime` sẽ được bổ sung ở Task 6. */
-export function renderField(field: FieldConfig): ReactNode {
+export const DATETIME_FORMAT = "DD/MM/YYYY HH:mm";
+
+/** Tạo control nhập cho một field. */
+export function renderField(field: FieldConfig, refOptions?: RefOptions): ReactNode {
   switch (field.kind) {
     case "text":
       return <Input />;
@@ -18,7 +20,11 @@ export function renderField(field: FieldConfig): ReactNode {
           precision={field.precision}
           style={{ width: "100%" }}
           formatter={(v, info) => (info.userTyping ? info.input : String(v ?? "").replace(".", ","))}
-          parser={(s) => parseViNumber(s ?? "") ?? NaN}
+          // Ô trống -> null (bắt buộc báo lỗi, tùy chọn gửi null); chữ không phải số -> NaN.
+          parser={(s) => {
+            if ((s ?? "").trim() === "") return null as unknown as number;
+            return parseViNumber(s ?? "") ?? NaN;
+          }}
         />
       );
     case "money":
@@ -42,8 +48,17 @@ export function renderField(field: FieldConfig): ReactNode {
     case "enum":
       return <Select options={field.options} />;
     case "ref":
+      return (
+        <Select
+          showSearch
+          allowClear={!field.required}
+          placeholder={field.placeholder}
+          options={refOptions?.[field.ref] ?? []}
+          optionFilterProp="label"
+        />
+      );
     case "datetime":
-      throw new Error("not implemented until Task 6");
+      return <DatePicker showTime format={DATETIME_FORMAT} style={{ width: "100%" }} />;
   }
 }
 
@@ -51,10 +66,11 @@ interface Props {
   form: FormInstance;
   fields: FieldConfig[];
   initialValues?: Record<string, unknown>;
+  refOptions?: RefOptions;
   onFinish: (values: Record<string, unknown>) => void;
 }
 
-export function KbEntityForm({ form, fields, initialValues, onFinish }: Props) {
+export function KbEntityForm({ form, fields, initialValues, refOptions, onFinish }: Props) {
   return (
     <Form form={form} layout="vertical" initialValues={initialValues} onFinish={onFinish}>
       {fields.map((f) => (
@@ -65,7 +81,7 @@ export function KbEntityForm({ form, fields, initialValues, onFinish }: Props) {
           valuePropName={f.kind === "bool" ? "checked" : "value"}
           rules={f.required ? [{ required: true, message: `Vui lòng nhập ${f.label.toLowerCase()}` }] : undefined}
         >
-          {renderField(f)}
+          {renderField(f, refOptions)}
         </Form.Item>
       ))}
     </Form>
