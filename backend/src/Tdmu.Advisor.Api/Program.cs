@@ -71,6 +71,26 @@ builder.Services.AddAuthorizationBuilder()
         .RequireRole(AdminSeeder.AdminRole)
         .Build());
 
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(o =>
+{
+    o.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "TDMU Advisor API", Version = "v1" });
+    o.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Dán access token lấy từ POST /api/auth/login.",
+    });
+    o.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        [new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        {
+            Reference = new Microsoft.OpenApi.Models.OpenApiReference { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "Bearer" },
+        }] = Array.Empty<string>(),
+    });
+});
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
@@ -83,6 +103,12 @@ using (var seedScope = app.Services.CreateScope())
     await AdminSeeder.SeedAsync(seedScope.ServiceProvider);
     if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Seed:SampleData"))
         await DevSampleSeeder.SeedAsync(seedScope.ServiceProvider.GetRequiredService<AdvisorDbContext>());
+}
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseRateLimiter();

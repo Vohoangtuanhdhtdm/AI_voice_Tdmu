@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>tdmu-advisor-api</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
