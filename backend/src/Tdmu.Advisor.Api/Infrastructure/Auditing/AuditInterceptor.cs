@@ -7,7 +7,7 @@ using Tdmu.Advisor.Api.Features.KnowledgeBase.Entities;
 namespace Tdmu.Advisor.Api.Infrastructure.Auditing;
 
 /// <summary>Ghi AuditLog cho mọi thay đổi trên bản nháp (ReleaseId == null), trong cùng lần SaveChanges.</summary>
-public class AuditInterceptor(ICurrentUser user) : SaveChangesInterceptor
+public class AuditInterceptor(ICurrentUser user, AuditSuppression suppression) : SaveChangesInterceptor
 {
     private static readonly HashSet<string> Excluded = ["Id", "Embedding", "Tsv"];
     private static readonly JsonSerializerOptions Json = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -27,7 +27,7 @@ public class AuditInterceptor(ICurrentUser user) : SaveChangesInterceptor
 
     private void AddAuditRows(DbContext? db)
     {
-        if (db is null) return;
+        if (db is null || suppression.IsSuppressed) return;
         var entries = db.ChangeTracker.Entries<KbEntity>()
             .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted && e.Entity.ReleaseId == null)
             .ToList();
