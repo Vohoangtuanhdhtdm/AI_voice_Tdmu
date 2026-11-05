@@ -9,6 +9,7 @@ import { RequireAuth } from "./auth/RequireAuth";
 import { AdminLayout, NotFound } from "./layout/AdminLayout";
 import { KbEntityPage } from "./kb/KbEntityPage";
 import { entityConfigs } from "./kb/entityConfigs";
+import { ImportPage } from "./import/ImportPage";
 import { isKbSlug } from "./layout/navigation";
 
 dayjs.locale("vi");
@@ -31,7 +32,7 @@ export function AppRoutes() {
       <Route element={<RequireAuth><AdminLayout /></RequireAuth>}>
         <Route path="/" element={<Navigate to="/kb/nganh" replace />} />
         <Route path="/kb/:slug" element={<KbRoute />} />
-        <Route path="/import" element={<div>Nhập dữ liệu</div>} />
+        <Route path="/import" element={<ImportPage />} />
         <Route path="/releases" element={<div>Xuất bản</div>} />
         <Route path="*" element={<NotFound />} />
       </Route>
