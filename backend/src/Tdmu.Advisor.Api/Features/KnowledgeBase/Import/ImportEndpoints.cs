@@ -44,7 +44,7 @@ public static class ImportEndpoints
                     statusCode: 400, contentType: "application/problem+json");
             try
             {
-                return Results.Ok(await svc.CommitAsync(kind, parsed.Dtos, ct));
+                return Results.Ok(await svc.CommitAsync(kind, parsed, ct));
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateException)
             {

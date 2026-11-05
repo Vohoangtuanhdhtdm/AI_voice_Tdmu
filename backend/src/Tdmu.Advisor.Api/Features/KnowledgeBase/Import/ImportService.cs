@@ -14,7 +14,7 @@ public sealed class ImportService(AdvisorDbContext db)
 {
     public const int MaxBytes = 5 * 1024 * 1024;
 
-    public sealed record Parsed(ImportPreview Preview, IReadOnlyList<object> Dtos);
+    public sealed record Parsed(ImportPreview Preview, IReadOnlyList<object> Dtos, IReadOnlySet<string> AbsentColumns);
 
     public static bool IsKnownKind(string kind) => Handlers.ContainsKey(kind);
 
@@ -61,13 +61,14 @@ public sealed class ImportService(AdvisorDbContext db)
             rows.Add(new ImportRow(rowNumber, values, ctx.Errors));
         }
         var errorCount = rows.Count(r => r.Errors.Count > 0);
-        return new Parsed(new ImportPreview(kind, rows, rows.Count - errorCount, errorCount), dtos);
+        var absent = handler.Optional.Where(c => !index.ContainsKey(c)).ToHashSet();
+        return new Parsed(new ImportPreview(kind, rows, rows.Count - errorCount, errorCount), dtos, absent);
     }
 
-    public async Task<ImportResult> CommitAsync(string kind, IReadOnlyList<object> dtos, CancellationToken ct)
+    public async Task<ImportResult> CommitAsync(string kind, Parsed parsed, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var result = await Handlers[kind].ApplyAsync(db, dtos, ct);
+        var result = await Handlers[kind].ApplyAsync(db, parsed.Dtos, parsed.AbsentColumns, ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return result;
@@ -177,6 +178,15 @@ public sealed class ImportService(AdvisorDbContext db)
             return v;
         }
 
+        public decimal? Money(string col)
+        {
+            var raw = values[col];
+            if (raw is null) { Errors.Add($"Cột {col} là bắt buộc"); return null; }
+            if (!NumberParser.TryParseMoney(raw, out var v)) { Errors.Add($"Cột {col}: '{raw}' không phải là số tiền hợp lệ (số nguyên, ví dụ 450000 hoặc 450.000)"); return null; }
+            values[col] = v.ToString(CultureInfo.InvariantCulture);
+            return v;
+        }
+
         public int? Int(string col, bool required = true)
         {
             var v = Dec(col, required);
@@ -207,7 +217,7 @@ public sealed class ImportService(AdvisorDbContext db)
         public string[] Columns { get; } = columns.Select(c => c.TrimEnd('?')).ToArray();
         public object?[] Example => example;
         public abstract Task<(object? Dto, object? Key)> CheckAsync(RowContext ctx, AdvisorDbContext db, CancellationToken ct);
-        public abstract Task<ImportResult> ApplyAsync(AdvisorDbContext db, IReadOnlyList<object> dtos, CancellationToken ct);
+        public abstract Task<ImportResult> ApplyAsync(AdvisorDbContext db, IReadOnlyList<object> dtos, IReadOnlySet<string> absent, CancellationToken ct);
     }
 
     private sealed class Handler<TEntity, TDto>(
@@ -232,7 +242,7 @@ public sealed class ImportService(AdvisorDbContext db)
             return (dto, dtoKey(dto));
         }
 
-        public override async Task<ImportResult> ApplyAsync(AdvisorDbContext db, IReadOnlyList<object> dtos, CancellationToken ct)
+        public override async Task<ImportResult> ApplyAsync(AdvisorDbContext db, IReadOnlyList<object> dtos, IReadOnlySet<string> absent, CancellationToken ct)
         {
             var existing = new Dictionary<object, TEntity>();
             foreach (var e in await db.Set<TEntity>().Where(x => x.ReleaseId == null).OrderBy(x => x.CapNhatLuc).ToListAsync(ct))
@@ -246,7 +256,12 @@ public sealed class ImportService(AdvisorDbContext db)
                 {
                     if (insertOnly) continue;
                     var before = e.ContentKey();
+                    var (ghiChu, nguonTen, nguonUrl) = (GhiChuOf(e), e.NguonTen, e.NguonUrl);
                     def.Apply(dto, e);
+                    // Cột tùy chọn vắng mặt trong file: giữ giá trị hiện có (ô trống trong cột có mặt thì xóa).
+                    if (absent.Contains("ghi_chu")) SetGhiChu(e, ghiChu);
+                    if (absent.Contains("nguon_ten")) e.NguonTen = nguonTen;
+                    if (absent.Contains("nguon_url")) e.NguonUrl = nguonUrl;
                     if (!Equals(before, e.ContentKey())) { e.CapNhatLuc = DateTimeOffset.UtcNow; updated++; }
                 }
                 else
@@ -261,6 +276,14 @@ public sealed class ImportService(AdvisorDbContext db)
             }
             return new ImportResult(inserted, updated);
         }
+    }
+
+    private static string? GhiChuOf(KbEntity e) => e switch { DiemChuan d => d.GhiChu, HocPhi h => h.GhiChu, _ => null };
+
+    private static void SetGhiChu(KbEntity e, string? v)
+    {
+        if (e is DiemChuan d) d.GhiChu = v;
+        else if (e is HocPhi h) h.GhiChu = v;
     }
 
     private static readonly Dictionary<string, Handler> Handlers = new()
@@ -287,7 +310,7 @@ public sealed class ImportService(AdvisorDbContext db)
             ["ma_nganh?", "nam", "muc", "don_vi", "ghi_chu?", "nguon_ten?", "nguon_url?"],
             ["", 2026, 450000, "tin_chi", "", "Thông báo học phí 2026", ""],
             c => new HocPhiDto(null, c.Ref("ma_nganh", c.L.Nganh, "Mã ngành", required: false), c.Int("nam"),
-                c.Dec("muc"), c.DonVi("don_vi"), c.Text("ghi_chu"), c.Text("nguon_ten"), c.Text("nguon_url")),
+                c.Money("muc"), c.DonVi("don_vi"), c.Text("ghi_chu"), c.Text("nguon_ten"), c.Text("nguon_url")),
             d => (d.NganhLid, d.Nam!.Value, d.DonVi!.Value),
             e => (e.NganhLid, e.Nam, e.DonVi)),
 

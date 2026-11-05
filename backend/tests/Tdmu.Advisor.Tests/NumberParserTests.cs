@@ -31,4 +31,33 @@ public class NumberParserTests
     {
         Assert.False(NumberParser.TryParseDecimal(raw, out _));
     }
+
+    [Theory]
+    [InlineData("450000", 450000)]
+    [InlineData(" 450.000 ", 450000)]
+    [InlineData("450,000", 450000)]
+    [InlineData("1.200.000", 1200000)]
+    [InlineData("1,200,000", 1200000)]
+    [InlineData("15000000", 15000000)]
+    public void Money_accepts(string raw, int expected)
+    {
+        Assert.True(NumberParser.TryParseMoney(raw, out var v));
+        Assert.Equal(expected, v);
+    }
+
+    [Theory]
+    [InlineData("450.5")]
+    [InlineData("450,50")]
+    [InlineData("1.200,000")]
+    [InlineData("1,200.000")]
+    [InlineData("1.20.000")]
+    [InlineData("1234.567")]
+    [InlineData("-450000")]
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("abc")]
+    public void Money_rejects(string? raw)
+    {
+        Assert.False(NumberParser.TryParseMoney(raw, out _));
+    }
 }

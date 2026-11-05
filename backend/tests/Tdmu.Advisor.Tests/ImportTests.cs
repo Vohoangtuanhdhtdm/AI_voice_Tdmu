@@ -120,7 +120,7 @@ public class ImportTests(ApiFactory f)
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(c, "diem-chuan", "preview", Csv("a", "x.txt"))).StatusCode);
         var big = new string('a', 5 * 1024 * 1024 + 10);
         var res = await Post(c, "diem-chuan", "preview", Csv(big));
-        Assert.True(res.StatusCode is HttpStatusCode.RequestEntityTooLarge or HttpStatusCode.BadRequest);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, res.StatusCode);
     }
 
     [Fact]
@@ -182,9 +182,11 @@ public class ImportTests(ApiFactory f)
     public async Task Hoc_phi_maps_don_vi_and_upserts_by_nganh_nam_don_vi()
     {
         var c = await Seeded();
-        var csv = "ma_nganh;nam;muc;don_vi\n;2026;\"1.200.000\";tin_chi\n7480201;2026;15000000;nam";
+        var csv = "ma_nganh;nam;muc;don_vi\n;2026;\"450,5\";tin_chi\n7480201;2026;15000000;nam";
         var bad = await Post(c, "hoc-phi", "commit", Csv(csv));
-        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode); // 1.200.000 là số không hợp lệ
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode); // học phí không có phần thập phân
+        var vn = await Json(await Post(c, "hoc-phi", "preview", Csv("ma_nganh;nam;muc;don_vi\n;2026;1.200.000;tin_chi")));
+        Assert.Equal("1200000", vn.GetProperty("rows")[0].GetProperty("values").GetProperty("muc").GetString());
 
         var ok = "ma_nganh;nam;muc;don_vi\n;2026;1200000;tin_chi\n7480201;2026;15000000;nam";
         var r1 = await Json(await Post(c, "hoc-phi", "commit", Csv(ok)));
@@ -248,5 +250,43 @@ public class ImportTests(ApiFactory f)
         var res = await c.GetAsync($"/api/admin/import/{kind}/template");
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         Assert.Contains("spreadsheetml", res.Content.Headers.ContentType!.MediaType);
+    }
+
+    [Fact]
+    public async Task Reimport_without_optional_columns_keeps_existing_values()
+    {
+        var c = await Seeded();
+        await Post(c, "diem-chuan", "commit", Csv("ma_nganh,nam,ma_phuong_thuc,diem,ghi_chu,nguon_ten\n7480201,2026,thi-thpt,21,Ghi chú gốc,Đề án"));
+        var r = await Json(await Post(c, "diem-chuan", "commit", Csv("ma_nganh,nam,ma_phuong_thuc,diem\n7480201,2026,thi-thpt,23")));
+        Assert.Equal(1, r.GetProperty("updated").GetInt32());
+        var row = (await Json(await c.GetAsync("/api/admin/kb/diem-chuan")))[0];
+        Assert.Equal(23m, row.GetProperty("diem").GetDecimal());
+        Assert.Equal("Ghi chú gốc", row.GetProperty("ghiChu").GetString());
+        Assert.Equal("Đề án", row.GetProperty("nguonTen").GetString());
+
+        // cột có mặt nhưng ô trống thì xóa giá trị
+        await Post(c, "diem-chuan", "commit", Csv("ma_nganh,nam,ma_phuong_thuc,diem,ghi_chu\n7480201,2026,thi-thpt,23,"));
+        row = (await Json(await c.GetAsync("/api/admin/kb/diem-chuan")))[0];
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("ghiChu").ValueKind);
+        Assert.Equal("Đề án", row.GetProperty("nguonTen").GetString());
+    }
+
+    [Fact]
+    public async Task Import_never_touches_released_rows()
+    {
+        var c = await Seeded();
+        await Post(c, "diem-chuan", "commit", Csv("ma_nganh,nam,ma_phuong_thuc,diem\n7480201,2026,thi-thpt,21"));
+        var rel = await c.PostAsJsonAsync("/api/admin/releases", new { ghiChu = "v1" });
+        Assert.Equal(HttpStatusCode.Created, rel.StatusCode);
+        var r = await Json(await Post(c, "diem-chuan", "commit", Csv("ma_nganh,nam,ma_phuong_thuc,diem\n7480201,2026,thi-thpt,25")));
+        Assert.Equal(1, r.GetProperty("updated").GetInt32());
+        Assert.Equal(0, r.GetProperty("inserted").GetInt32());
+
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AdvisorDbContext>();
+        var released = await db.DiemChuan.AsNoTracking().Where(x => x.ReleaseId != null).ToListAsync();
+        var draft = await db.DiemChuan.AsNoTracking().Where(x => x.ReleaseId == null).ToListAsync();
+        Assert.Equal(21m, Assert.Single(released).Diem);
+        Assert.Equal(25m, Assert.Single(draft).Diem);
     }
 }
