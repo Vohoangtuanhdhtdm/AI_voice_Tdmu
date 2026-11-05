@@ -32,6 +32,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Auth:JwtKey", TestJwtKey);
         builder.UseSetting("Auth:SeedAdminEmail", AdminEmail);
         builder.UseSetting("Auth:SeedAdminPassword", AdminPassword);
+        builder.UseSetting("RateLimit:PublicPermitsPerMinute", "100000");
     }
 
     /// <summary>Xóa dữ liệu mọi bảng (trừ lịch sử migration và bảng Identity). Respawner tạo lười vì ở Task 1 chưa có bảng nào.</summary>

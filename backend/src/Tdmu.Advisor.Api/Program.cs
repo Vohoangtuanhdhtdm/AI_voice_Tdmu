@@ -5,6 +5,9 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Tdmu.Advisor.Api.Infrastructure;
 using Tdmu.Advisor.Api.Infrastructure.Auditing;
+using System.Threading.RateLimiting;
+using Tdmu.Advisor.Api.Features.KnowledgeBase.Query;
+using Tdmu.Advisor.Api.Features.KnowledgeBase.Seed;
 using Tdmu.Advisor.Api.Infrastructure.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +17,15 @@ builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
 builder.Services.AddScoped<AuditSuppression>();
 builder.Services.AddScoped<AuditInterceptor>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Releases.ReleaseService>();
+builder.Services.AddScoped<IKnowledgeQuery, KnowledgeQuery>();
+var permits = builder.Configuration.GetValue<int?>("RateLimit:PublicPermitsPerMinute") ?? 60;
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddPolicy(PublicEndpoints.RateLimitPolicy, ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = permits, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(builder.Configuration.GetConnectionString("Default"));
 dataSourceBuilder.UseVector();
 var dataSource = dataSourceBuilder.Build();
@@ -66,14 +78,20 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
     await scope.ServiceProvider.GetRequiredService<AdvisorDbContext>().Database.MigrateAsync();
 }
 using (var seedScope = app.Services.CreateScope())
+{
     await AdminSeeder.SeedAsync(seedScope.ServiceProvider);
+    if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Seed:SampleData"))
+        await DevSampleSeeder.SeedAsync(seedScope.ServiceProvider.GetRequiredService<AdvisorDbContext>());
+}
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapAuthEndpoints();
+app.MapPublicEndpoints();
 
 app.Run();
 
