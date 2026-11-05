@@ -120,26 +120,28 @@ Mọi bản ghi tri thức có `nguon_ten` và `nguon_url` để trích dẫn.
 
 | Bảng | Trường chính | Ràng buộc |
 |---|---|---|
-| `mua_tuyen_sinh` | `nam`, `la_hien_tai` | chỉ một mùa hiện tại |
+| `mua_tuyen_sinh` | `nam`, `la_hien_tai` | chỉ một mùa hiện tại theo release |
 | `nganh` | `ma_nganh`, `ten`, `ten_goi_khac text[]`, `don_vi`, `mo_ta_ngan`, `con_tuyen` | unique `ma_nganh` theo release |
-| `phuong_thuc` | `ma`, `ten`, `mo_ta` | unique `ma` |
-| `to_hop` | `ma`, `mon text[]`, `cach_doc` | unique `ma` |
-| `nganh_to_hop` | `nganh_id`, `nam`, `to_hop_id` | unique cả ba |
-| `diem_chuan` | `nganh_id`, `nam`, `phuong_thuc_id`, `diem numeric(5,2)`, `ghi_chu` | unique (ngành, năm, phương thức) |
-| `chi_tieu` | `nganh_id`, `nam`, `phuong_thuc_id?`, `so_luong` | unique (ngành, năm, phương thức) |
-| `hoc_phi` | `nganh_id?`, `nam`, `muc numeric`, `don_vi` (tín chỉ/năm/học kỳ), `ghi_chu` | |
-| `moc_thoi_gian` | `nam`, `ten_moc`, `bat_dau`, `ket_thuc?`, `phuong_thuc_id?`, `mo_ta` | |
+| `phuong_thuc` | `ma`, `ten`, `mo_ta`, `thang_diem numeric(7,2)` (mặc định 30; ĐGNL tới 1200) | unique `ma` theo release |
+| `to_hop` | `ma`, `mon text[]`, `cach_doc` | unique `ma` theo release |
+| `nganh_to_hop` | `nganh_lid`, `nam`, `to_hop_lid` | unique cả ba theo release |
+| `diem_chuan` | `nganh_lid`, `nam`, `phuong_thuc_lid`, `diem numeric(7,2)`, `ghi_chu` | unique (ngành, năm, phương thức) theo release |
+| `chi_tieu` | `nganh_lid`, `nam`, `phuong_thuc_lid?`, `so_luong` | unique (ngành, năm, phương thức) theo release |
+| `hoc_phi` | `nganh_lid?`, `nam`, `muc numeric(14,2)`, `don_vi` (tín chỉ/năm/học kỳ), `ghi_chu` | |
+| `moc_thoi_gian` | `nam`, `ten_moc`, `bat_dau`, `ket_thuc?`, `phuong_thuc_lid?`, `mo_ta` | |
 | `faq` | `cau_hoi`, `cach_hoi_khac text[]`, `tra_loi`, `chu_de`, `embedding vector(768)` | |
 | `tai_lieu` | `tieu_de`, `duong_dan_file`, `nam_ap_dung`, `trang_thai` (cho_xu_ly/dang_xu_ly/xong/that_bai), `loi` | |
-| `tai_lieu_chunk` | `tai_lieu_id`, `thu_tu`, `noi_dung`, `vi_tri`, `embedding vector(768)`, `tsv tsvector` | |
+| `tai_lieu_chunk` | `tai_lieu_lid`, `thu_tu`, `noi_dung`, `vi_tri`, `embedding vector(768)`, `tsv tsvector` | |
 | `release` | `so_hieu`, `ghi_chu`, `tao_boi`, `tao_luc`, `is_active` | chỉ một release active |
 | `audit_log` | như mục 4.1 | |
 | Identity | `AspNetUsers`… | |
 
+**Quy ước tham chiếu:** mọi bản ghi tri thức có `id` (khóa vật lý của từng dòng) và `logical_id` (định danh bền qua các release), cùng `release_id` (null = bản nháp). Quan hệ giữa các bảng tham chiếu bằng `*_lid` (logical id), không dùng `*_id`, để bản sao trong release vẫn trỏ đúng thực thể. Mọi bảng tri thức có unique `(release_id, logical_id)`; các unique nghiệp vụ ở trên đều có `release_id` và dùng `NULLS NOT DISTINCT` nên bản nháp (`release_id` null) cũng bị ràng buộc.
+
 **Chỉ mục:**
-- HNSW trên các cột `embedding`.
+- HNSW (`vector_cosine_ops`) trên các cột `embedding`.
 - GIN trên `tsv`.
-- GIN `pg_trgm` trên `unaccent(ten)` và trên `ten_goi_khac`.
+- GIN `pg_trgm` (`gin_trgm_ops`) trên `nganh.ten`. Chỉ mục trên `unaccent(ten)` và `ten_goi_khac` để sau.
 
 ### 4.3 Nhập liệu và xử lý tài liệu
 - **Nhập từ Excel/CSV** cho điểm chuẩn, chỉ tiêu, học phí, tổ hợp:
