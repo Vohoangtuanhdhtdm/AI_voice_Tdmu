@@ -3,11 +3,16 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Tdmu.Advisor.Api.Infrastructure;
+using Tdmu.Advisor.Api.Infrastructure.Auditing;
 using Tdmu.Advisor.Api.Infrastructure.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<AdvisorDbContext>(o => o
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+builder.Services.AddScoped<AuditInterceptor>();
+builder.Services.AddDbContext<AdvisorDbContext>((sp, o) => o
+    .AddInterceptors(sp.GetRequiredService<AuditInterceptor>())
     .UseNpgsql(builder.Configuration.GetConnectionString("Default"), npgsql => npgsql.UseVector())
     .UseSnakeCaseNamingConvention());
 
