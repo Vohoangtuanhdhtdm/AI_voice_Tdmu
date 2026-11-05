@@ -114,12 +114,38 @@ describe("ReleasesPage", () => {
     renderWithProviders(<ReleasesPage />);
     await screen.findByText("Bản cũ");
     const row = screen.getByText("Bản cũ").closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: "Khôi phục về bản nháp" }));
+    await user.click(within(row).getByRole("button", { name: "Khôi phục về bản nháp #2" }));
     expect(
       await screen.findByText("Toàn bộ bản nháp hiện tại sẽ bị thay bằng nội dung phiên bản #2. Tiếp tục?"),
     ).toBeInTheDocument();
     expect(restored).toBe(0);
     await user.click(screen.getByRole("button", { name: "Đồng ý" }));
     await waitFor(() => expect(restored).toBe(1));
+  });
+
+  it("Row_action_buttons_name_the_version", async () => {
+    mockGets([]);
+    renderWithProviders(<ReleasesPage />);
+    expect(await screen.findByRole("button", { name: "Kích hoạt #2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Khôi phục về bản nháp #3" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Kích hoạt #3" })).not.toBeInTheDocument();
+  });
+
+  it("Unauthorized_action_shows_no_error_toast", async () => {
+    mockGets([]);
+    let called = false;
+    server.use(
+      http.post("/api/admin/releases/r2/restore-to-draft", () => {
+        called = true;
+        return HttpResponse.json({ title: "Phiên hết hạn" }, { status: 401 });
+      }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderWithProviders(<ReleasesPage />);
+    await user.click(await screen.findByRole("button", { name: "Khôi phục về bản nháp #2" }));
+    await user.click(await screen.findByRole("button", { name: "Đồng ý" }));
+    await waitFor(() => expect(called).toBe(true));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(screen.queryByText("Phiên hết hạn")).not.toBeInTheDocument();
   });
 });

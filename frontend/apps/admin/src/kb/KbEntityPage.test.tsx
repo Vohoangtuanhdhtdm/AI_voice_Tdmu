@@ -91,13 +91,15 @@ describe("KbEntityPage", () => {
     );
     const user = userEvent.setup({ delay: null });
     renderAt("/kb/nganh");
-    await user.click(await screen.findByRole("button", { name: "Xóa" }));
+    await user.click(await screen.findByRole("button", { name: "Xóa Công nghệ thông tin" }));
     const pop = (await screen.findByText("Xóa bản ghi này khỏi bản nháp?")).closest(".ant-popover") as HTMLElement;
     await user.click(within(pop).getByRole("button", { name: "Xóa" }));
 
     // antd Modal.error render tiêu đề hai lần (nhãn aria + tiêu đề hiển thị).
     expect((await screen.findAllByText("Không thể xóa vì đang được tham chiếu")).length).toBeGreaterThan(0);
     for (const r of refs) expect(screen.getByText(r)).toBeInTheDocument();
+    // Hộp thoại dùng ngữ cảnh antd <App> nên nút xác nhận là tiếng Việt.
+    expect(screen.getByRole("button", { name: "Đồng ý" })).toBeInTheDocument();
     expect(screen.getByText("Công nghệ thông tin")).toBeInTheDocument();
   });
 
@@ -111,12 +113,49 @@ describe("KbEntityPage", () => {
     );
     const user = userEvent.setup({ delay: null });
     renderAt("/kb/nganh");
-    await user.click(await screen.findByRole("button", { name: "Sửa" }));
+    await user.click(await screen.findByRole("button", { name: "Sửa Công nghệ thông tin" }));
     const dialog = await screen.findByRole("dialog", { hidden: true });
     await waitFor(() => expect(within(dialog).getByLabelText("Tên ngành")).toHaveValue("Công nghệ thông tin"));
     const field = within(dialog).getByText("Tên gọi khác").closest(".ant-form-item")!;
     expect(within(field as HTMLElement).getByText("CNTT")).toBeInTheDocument();
     expect(within(field as HTMLElement).getByText("IT")).toBeInTheDocument();
+  });
+});
+
+describe("KbEntityPage final fixes", () => {
+  it("Unauthorized_save_shows_no_error_toast", async () => {
+    let called = false;
+    server.use(
+      http.get("/api/admin/kb/phuong-thuc", () => HttpResponse.json([])),
+      http.post("/api/admin/kb/phuong-thuc", () => {
+        called = true;
+        return HttpResponse.json({ title: "Phiên hết hạn" }, { status: 401 });
+      }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderAt("/kb/phuong-thuc");
+    await user.click(await screen.findByRole("button", { name: "Thêm mới" }));
+    await user.type(await screen.findByLabelText("Mã"), "A");
+    await user.type(screen.getByLabelText("Tên"), "B");
+    await user.type(screen.getByLabelText("Thang điểm"), "10");
+    await user.click(screen.getByRole("button", { name: "Lưu" }));
+    await waitFor(() => expect(called).toBe(true));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(screen.queryByText("Phiên hết hạn")).not.toBeInTheDocument();
+  });
+
+  it("Row_buttons_are_named_after_the_row", async () => {
+    server.use(
+      http.get("/api/admin/kb/phuong-thuc", () =>
+        HttpResponse.json([
+          { logicalId: "p1", ma: "THPT", ten: "thi THPT", thangDiem: 30 },
+          { logicalId: "p2", ma: "DGNL", ten: "đánh giá năng lực", thangDiem: 1200 },
+        ]),
+      ),
+    );
+    renderAt("/kb/phuong-thuc");
+    expect(await screen.findByRole("button", { name: "Sửa thi THPT" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Xóa đánh giá năng lực" })).toBeInTheDocument();
   });
 });
 

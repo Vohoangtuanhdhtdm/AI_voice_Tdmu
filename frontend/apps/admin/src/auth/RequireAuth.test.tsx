@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 function Protected() {
-  const q = useQuery({ queryKey: ["ping"], queryFn: () => apiFetch<{ ok: boolean }>("/api/admin/ping") });
+  const q = useQuery({ queryKey: ["kb", "nganh"], queryFn: () => apiFetch<unknown[]>("/api/admin/kb/nganh") });
   return <div>{q.isSuccess ? "Trang ngành" : "Đang tải"}</div>;
 }
 
@@ -50,21 +50,24 @@ describe("RequireAuth", () => {
     authStore.setSession({ accessToken: "old", expiresAt: future() });
     let calls = 0;
     server.use(
-      http.get("/api/admin/ping", () => {
+      http.get("/api/admin/kb/nganh", () => {
         calls += 1;
         return calls === 1
           ? HttpResponse.json({ title: "Hết hạn" }, { status: 401 })
-          : HttpResponse.json({ ok: true });
+          : HttpResponse.json([]);
       }),
       http.post("/api/auth/login", () =>
         HttpResponse.json({ accessToken: "new", expiresAt: future() }),
       ),
     );
-    renderApp("/kb/nganh");
+    const { queryClient } = renderApp("/kb/nganh");
+    queryClient.setQueryData(["kb", "khac"], [{ logicalId: "x" }]);
     expect(
       await screen.findByText("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại"),
     ).toBeInTheDocument();
     expect(authStore.getToken()).toBeNull();
+    // Dữ liệu của phiên cũ bị xóa khỏi cache.
+    expect(queryClient.getQueryData(["kb", "khac"])).toBeUndefined();
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Email"), "a@b.vn");

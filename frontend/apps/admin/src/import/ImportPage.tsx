@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
-import { Alert, Button, Select, Space, Table, Typography, Upload, message } from "antd";
+import { Alert, App, Button, Select, Space, Table, Typography, Upload } from "antd";
 import { DownloadOutlined, InboxOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ApiError, downloadBlob } from "../api/client";
+import { ApiError, downloadBlob, isUnauthorized } from "../api/client";
 import { commitImport, importKindLabels, previewImport, type ImportKind } from "../api/importApi";
 import type { ImportPreview, ImportRow } from "../api/types";
 
@@ -11,6 +11,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const errorText = (e: unknown) => (e instanceof ApiError ? e.title : "Có lỗi xảy ra");
 
 export function ImportPage() {
+  const { message } = App.useApp();
   const qc = useQueryClient();
   const [kind, setKind] = useState<ImportKind>("diem-chuan");
   const [file, setFile] = useState<File | null>(null);
@@ -80,7 +81,7 @@ export function ImportPage() {
     try {
       await downloadBlob(`/api/admin/import/${kind}/template`, `mau-${kind}.xlsx`);
     } catch (e) {
-      message.error(errorText(e));
+      if (!isUnauthorized(e)) message.error(errorText(e));
     }
   };
 

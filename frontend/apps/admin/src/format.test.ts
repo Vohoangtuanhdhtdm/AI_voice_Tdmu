@@ -24,6 +24,10 @@ describe("format", () => {
     expect(formatInt(2026, false)).toBe("2026");
     expect(formatInt(null)).toBe("");
   });
+  it("tests run in a non-Vietnam timezone (proves TZ independence)", () => {
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe("America/New_York");
+    expect(new Date("2026-01-15T00:00:00Z").getTimezoneOffset()).toBe(300);
+  });
   it("formats date-times in Asia/Ho_Chi_Minh", () => {
     expect(formatDateTime("2026-03-01T17:30:00Z")).toBe("02/03/2026 00:30");
   });

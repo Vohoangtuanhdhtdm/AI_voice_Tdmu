@@ -1,5 +1,6 @@
 import { Button, Layout, Menu, Typography, type MenuProps } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/authStore";
 import { KB_MENU_GROUPS, KB_TITLES, KB_UNGROUPED, type KbSlug } from "./navigation";
 
@@ -24,6 +25,7 @@ export function AdminLayout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const queryClient = useQueryClient();
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -33,6 +35,8 @@ export function AdminLayout() {
         </Typography.Title>
         <Button
           onClick={() => {
+            // Không để dữ liệu của phiên trước trong cache cho người đăng nhập sau.
+            queryClient.clear();
             logout();
             navigate("/login");
           }}

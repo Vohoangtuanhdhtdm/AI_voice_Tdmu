@@ -1,3 +1,7 @@
+// Ghim múi giờ khác Việt Nam (trước mọi lần dùng Date/dayjs) để chứng minh hiển thị/nhập giờ
+// không phụ thuộc múi giờ máy.
+process.env.TZ = "America/New_York";
+
 import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { cleanup } from "@testing-library/react";

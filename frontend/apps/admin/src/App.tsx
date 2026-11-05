@@ -1,6 +1,6 @@
-import { ConfigProvider } from "antd";
+import { App as AntApp, ConfigProvider } from "antd";
 import viVN from "antd/locale/vi_VN";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import dayjs from "dayjs";
 import "dayjs/locale/vi";
@@ -12,12 +12,13 @@ import { entityConfigs } from "./kb/entityConfigs";
 import { ImportPage } from "./import/ImportPage";
 import { ReleasesPage } from "./releases/ReleasesPage";
 import { isKbSlug } from "./layout/navigation";
+import { createQueryClient } from "./queryClient";
 
 dayjs.locale("vi");
 
 export const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true } as const;
 
-const queryClient = new QueryClient();
+const queryClient = createQueryClient();
 
 function KbRoute() {
   const { slug } = useParams();
@@ -44,11 +45,14 @@ export function AppRoutes() {
 export default function App() {
   return (
     <ConfigProvider locale={viVN}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter future={routerFuture}>
-          <AppRoutes />
-        </BrowserRouter>
-      </QueryClientProvider>
+      {/* <AntApp> cho message/modal dùng ngữ cảnh (ngôn ngữ vi_VN, theme) qua App.useApp(). */}
+      <AntApp>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter future={routerFuture}>
+            <AppRoutes />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </AntApp>
     </ConfigProvider>
   );
 }

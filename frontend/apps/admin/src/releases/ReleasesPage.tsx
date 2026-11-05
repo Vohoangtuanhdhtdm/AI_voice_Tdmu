@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import { Alert, Button, Empty, Form, Input, Modal, Popconfirm, Space, Table, Tag, Typography, message } from "antd";
-import { ApiError } from "../api/client";
+import { Alert, App, Button, Empty, Form, Input, Modal, Popconfirm, Space, Table, Tag, Typography } from "antd";
+import { ApiError, isUnauthorized } from "../api/client";
 import { useActivate, usePublish, useReleaseDiff, useReleases, useRestoreToDraft } from "../api/releases";
 import type { DiffItem, Release } from "../api/types";
 import { formatDateTime } from "../format";
@@ -27,6 +27,7 @@ const KIND: Record<DiffItem["kind"], { text: string; color: string }> = {
 const errorText = (e: unknown) => (e instanceof ApiError ? e.title : "Có lỗi xảy ra");
 
 export function ReleasesPage() {
+  const { message } = App.useApp();
   const diff = useReleaseDiff();
   const releases = useReleases();
   const publish = usePublish();
@@ -61,6 +62,7 @@ export function ReleasesPage() {
       setOpen(false);
       form.resetFields();
     } catch (e) {
+      if (isUnauthorized(e)) return;
       if (e instanceof ApiError && e.status === 409) {
         message.info(e.title);
         setOpen(false);
@@ -76,7 +78,7 @@ export function ReleasesPage() {
       await fn();
       message.success(ok);
     } catch (e) {
-      message.error(errorText(e));
+      if (!isUnauthorized(e)) message.error(errorText(e));
     }
   };
 
@@ -142,7 +144,12 @@ export function ReleasesPage() {
                         run(() => activate.mutateAsync(r.id), `Đã kích hoạt phiên bản #${r.soHieu}`)
                       }
                     >
-                      <Button type="link" size="small" loading={activate.isPending && activate.variables === r.id}>
+                      <Button
+                        type="link"
+                        size="small"
+                        aria-label={`Kích hoạt #${r.soHieu}`}
+                        loading={activate.isPending && activate.variables === r.id}
+                      >
                         Kích hoạt
                       </Button>
                     </Popconfirm>
@@ -153,7 +160,13 @@ export function ReleasesPage() {
                       run(() => restore.mutateAsync(r.id), `Đã khôi phục bản nháp từ phiên bản #${r.soHieu}`)
                     }
                   >
-                    <Button type="link" size="small" danger loading={restore.isPending && restore.variables === r.id}>
+                    <Button
+                      type="link"
+                      size="small"
+                      danger
+                      aria-label={`Khôi phục về bản nháp #${r.soHieu}`}
+                      loading={restore.isPending && restore.variables === r.id}
+                    >
                       Khôi phục về bản nháp
                     </Button>
                   </Popconfirm>

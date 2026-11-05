@@ -47,10 +47,13 @@ describe("AdminLayout", () => {
   });
 
   it("logs out and returns to login", async () => {
-    renderAuthed("/kb/nganh");
+    const { queryClient } = renderAuthed("/kb/nganh");
+    queryClient.setQueryData(["kb", "khac"], [{ logicalId: "x" }]);
     await userEvent.setup().click(await screen.findByRole("button", { name: "Đăng xuất" }));
     expect(await screen.findByRole("button", { name: "Đăng nhập" })).toBeInTheDocument();
     expect(sessionStorage.getItem("tdmu-admin-auth")).toBeNull();
+    // Dữ liệu của phiên trước không còn trong cache.
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
   });
 
   it("shows not-found for unknown slug", async () => {

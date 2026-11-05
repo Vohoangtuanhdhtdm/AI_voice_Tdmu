@@ -24,6 +24,9 @@ export class ApiError extends Error {
   }
 }
 
+/** 401 đã được xử lý bằng chuyển về trang đăng nhập: không cần hiện thông báo lỗi riêng. */
+export const isUnauthorized = (e: unknown): boolean => e instanceof ApiError && e.status === 401;
+
 let onUnauthorized: (() => void) | null = null;
 
 /** Đăng ký hàm chạy khi API trả 401 (phiên hết hạn). Truyền null để gỡ. */

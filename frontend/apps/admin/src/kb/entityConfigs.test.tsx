@@ -93,7 +93,7 @@ describe("entity configs", () => {
     );
     const user = userEvent.setup({ delay: null });
     renderSlug("diem-chuan");
-    await user.click(await screen.findByRole("button", { name: "Sửa" }));
+    await user.click(await screen.findByRole("button", { name: /^Sửa / }));
     const dialog = await screen.findByRole("dialog", { hidden: true });
     const diem = within(dialog).getByLabelText("Điểm");
     await waitFor(() => expect(diem).toHaveValue("21,5"));
@@ -147,7 +147,7 @@ describe("entity configs", () => {
     expect(await screen.findByText("01/07/2026 08:00")).toBeInTheDocument();
 
     // Sửa: ô ngày giờ hiện 08:00 (giờ Việt Nam), không phải 01:00 UTC.
-    await user.click(screen.getByRole("button", { name: "Sửa" }));
+    await user.click(screen.getByRole("button", { name: /^Sửa / }));
     let dialog = await screen.findByRole("dialog", { hidden: true });
     await waitFor(() => expect(within(dialog).getByLabelText("Bắt đầu")).toHaveValue("01/07/2026 08:00"));
     await user.click(screen.getByRole("button", { name: "Hủy" }));
@@ -192,7 +192,7 @@ describe("entity configs", () => {
     );
     const user = userEvent.setup({ delay: null });
     renderSlug("hoc-phi");
-    await user.click(await screen.findByRole("button", { name: "Sửa" }));
+    await user.click(await screen.findByRole("button", { name: /^Sửa / }));
     const dialog = await screen.findByRole("dialog", { hidden: true });
     await within(dialog).findByText("7480201 – Công nghệ thông tin");
     const field = within(dialog).getByText("Ngành").closest(".ant-form-item") as HTMLElement;

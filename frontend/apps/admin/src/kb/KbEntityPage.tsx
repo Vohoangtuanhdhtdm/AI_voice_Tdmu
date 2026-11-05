@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Form, Modal, Popconfirm, Select, Space, Table, Typography, message } from "antd";
-import { ApiError } from "../api/client";
+import { Alert, App, Button, Form, Modal, Popconfirm, Select, Space, Table, Typography } from "antd";
+import { ApiError, isUnauthorized } from "../api/client";
 import { useKbCreate, useKbDelete, useKbList, useKbUpdate, type KbRow } from "../api/kb";
 import type { EntityConfig, RefKind } from "./entityConfig";
 import { toFormValues, toRequestBody } from "./formValues";
@@ -12,6 +12,7 @@ const ALL = "all";
 
 export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
   const { slug } = config;
+  const { message, modal: dialog } = App.useApp();
   const list = useKbList(slug);
   const create = useKbCreate(slug);
   const update = useKbUpdate(slug);
@@ -47,6 +48,7 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
       message.success("Đã lưu vào bản nháp");
       close();
     } catch (err) {
+      if (isUnauthorized(err)) return;
       const names = config.fields.map((f) => f.name);
       const applied = applyApiErrorToForm(form, err, names);
       const extra = unmatchedFieldMessages(err, names);
@@ -62,9 +64,12 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
       await del.mutateAsync(row.logicalId);
       message.success("Đã xóa khỏi bản nháp");
     } catch (err) {
+      if (isUnauthorized(err)) return;
       if (err instanceof ApiError && err.status === 409) {
-        Modal.error({
+        dialog.error({
           title: err.title,
+          // vi_VN của antd dùng "OK" cho hộp thoại một nút (justOkText): đặt rõ tiếng Việt.
+          okText: "Đồng ý",
           content: (
             <ul>
               {err.thamChieu.map((t) => (
@@ -90,7 +95,7 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
       key: "actions",
       render: (_: unknown, row: KbRow) => (
         <Space>
-          <Button type="link" onClick={() => setModal({ row })}>
+          <Button type="link" aria-label={`Sửa ${config.rowLabel(row, refs.maps)}`} onClick={() => setModal({ row })}>
             Sửa
           </Button>
           <Popconfirm
@@ -99,7 +104,7 @@ export function KbEntityPage({ config }: { config: EntityConfig<KbRow> }) {
             cancelText="Hủy"
             onConfirm={() => remove(row)}
           >
-            <Button type="link" danger>
+            <Button type="link" danger aria-label={`Xóa ${config.rowLabel(row, refs.maps)}`}>
               Xóa
             </Button>
           </Popconfirm>
