@@ -15,5 +15,5 @@ public class TaiLieuChunk : KbEntity
     // Embedding và tsv được suy ra từ nội dung nên không nằm trong khóa nội dung.
     private sealed record Key(Guid TaiLieuLid, int ThuTu, string NoiDung, string? ViTri, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(TaiLieuLid, ThuTu, NoiDung, ViTri, NguonTen, NguonUrl);
-    public override string Label() => $"Đoạn {ThuTu} của tài liệu {TaiLieuLid}";
+    public override string Label(IKbLabelLookup lookup) => $"{lookup.TaiLieu(TaiLieuLid)} – đoạn {ThuTu}";
 }

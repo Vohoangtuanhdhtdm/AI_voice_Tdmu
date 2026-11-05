@@ -14,7 +14,7 @@ public abstract class KbEntity
     public abstract object ContentKey();
 
     /// <summary>Chuỗi hiển thị trong danh sách thay đổi.</summary>
-    public abstract string Label();
+    public abstract string Label(IKbLabelLookup lookup);
 
     protected static string Join(IEnumerable<string> items) => string.Join('\u001f', items);
 }

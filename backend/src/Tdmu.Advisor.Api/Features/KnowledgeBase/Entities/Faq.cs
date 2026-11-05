@@ -13,5 +13,5 @@ public class Faq : KbEntity
     // Embedding được suy ra từ nội dung nên không nằm trong khóa nội dung.
     private sealed record Key(string CauHoi, string CachHoiKhac, string TraLoi, string? ChuDe, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(CauHoi, Join(CachHoiKhac), TraLoi, ChuDe, NguonTen, NguonUrl);
-    public override string Label() => $"Câu hỏi thường gặp: {CauHoi}";
+    public override string Label(IKbLabelLookup lookup) => $"Câu hỏi thường gặp: {CauHoi}";
 }

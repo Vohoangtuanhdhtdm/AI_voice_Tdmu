@@ -11,5 +11,5 @@ public class MocThoiGian : KbEntity
 
     private sealed record Key(int Nam, string TenMoc, DateTimeOffset BatDau, DateTimeOffset? KetThuc, Guid? PhuongThucLid, string? MoTa, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(Nam, TenMoc, BatDau, KetThuc, PhuongThucLid, MoTa, NguonTen, NguonUrl);
-    public override string Label() => $"Mốc thời gian {TenMoc} {Nam}";
+    public override string Label(IKbLabelLookup lookup) => $"{TenMoc} {Nam}" + (PhuongThucLid is { } p ? $" – {lookup.PhuongThuc(p)}" : "");
 }

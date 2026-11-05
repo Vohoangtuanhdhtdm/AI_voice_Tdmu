@@ -94,7 +94,7 @@ public static class KbModelConfiguration
             e.ToTable(table);
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ReleaseId, x.LogicalId }).IsUnique().AreNullsDistinct(false);
-            e.HasOne<Release>().WithMany().HasForeignKey(x => x.ReleaseId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Release>().WithMany().HasForeignKey(x => x.ReleaseId).OnDelete(DeleteBehavior.Restrict);
             extra(e);
         });
     }

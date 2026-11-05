@@ -10,5 +10,5 @@ public class DiemChuan : KbEntity
 
     private sealed record Key(Guid NganhLid, int Nam, Guid PhuongThucLid, decimal Diem, string? GhiChu, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(NganhLid, Nam, PhuongThucLid, Diem, GhiChu, NguonTen, NguonUrl);
-    public override string Label() => $"Điểm chuẩn {NganhLid} {Nam} – {PhuongThucLid}";
+    public override string Label(IKbLabelLookup lookup) => $"Điểm chuẩn {lookup.Nganh(NganhLid)} {Nam} – {lookup.PhuongThuc(PhuongThucLid)}";
 }

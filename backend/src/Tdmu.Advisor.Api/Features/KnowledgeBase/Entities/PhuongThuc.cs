@@ -10,5 +10,5 @@ public class PhuongThuc : KbEntity
 
     private sealed record Key(string Ma, string Ten, string? MoTa, decimal ThangDiem, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(Ma, Ten, MoTa, ThangDiem, NguonTen, NguonUrl);
-    public override string Label() => $"Phương thức {Ten}";
+    public override string Label(IKbLabelLookup lookup) => $"Phương thức {Ten}";
 }

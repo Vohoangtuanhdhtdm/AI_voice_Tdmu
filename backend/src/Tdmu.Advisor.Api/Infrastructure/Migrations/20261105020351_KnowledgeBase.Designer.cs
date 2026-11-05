@@ -15,7 +15,7 @@ using Tdmu.Advisor.Api.Infrastructure;
 namespace Tdmu.Advisor.Api.Infrastructure.Migrations
 {
     [DbContext(typeof(AdvisorDbContext))]
-    [Migration("20261105020108_KnowledgeBase")]
+    [Migration("20261105020351_KnowledgeBase")]
     partial class KnowledgeBase
     {
         /// <inheritdoc />
@@ -1194,7 +1194,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_chi_tieu_release_release_id");
                 });
 
@@ -1203,7 +1203,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_diem_chuan_release_release_id");
                 });
 
@@ -1212,7 +1212,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_faq_release_release_id");
                 });
 
@@ -1221,7 +1221,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_hoc_phi_release_release_id");
                 });
 
@@ -1230,7 +1230,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_moc_thoi_gian_release_release_id");
                 });
 
@@ -1239,7 +1239,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_mua_tuyen_sinh_release_release_id");
                 });
 
@@ -1248,7 +1248,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_nganh_release_release_id");
                 });
 
@@ -1257,7 +1257,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_nganh_to_hop_release_release_id");
                 });
 
@@ -1266,7 +1266,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_phuong_thuc_release_release_id");
                 });
 
@@ -1275,7 +1275,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_tai_lieu_release_release_id");
                 });
 
@@ -1284,7 +1284,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_tai_lieu_chunk_release_release_id");
                 });
 
@@ -1293,7 +1293,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.HasOne("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.Release", null)
                         .WithMany()
                         .HasForeignKey("ReleaseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_to_hop_release_release_id");
                 });
 #pragma warning restore 612, 618

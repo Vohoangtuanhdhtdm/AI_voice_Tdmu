@@ -127,4 +127,31 @@ public class KbSchemaTests(ApiFactory f)
         Assert.Contains("USING gin (ten gin_trgm_ops)", all);
         Assert.Contains("NULLS NOT DISTINCT", all);
     }
+
+    [Fact]
+    public void DiemChuan_label_uses_lookup_names_and_falls_back_for_unknown_lids()
+    {
+        var (n, p) = (Guid.NewGuid(), Guid.NewGuid());
+        var dc = Dc(n, p);
+        var lookup = new DictionaryKbLabelLookup(
+            nganh: new Dictionary<Guid, string> { [n] = "Công nghệ thông tin" },
+            phuongThuc: new Dictionary<Guid, string> { [p] = "thi THPT" });
+        Assert.Equal("Điểm chuẩn Công nghệ thông tin 2026 – thi THPT", dc.Label(lookup));
+        Assert.Equal($"Điểm chuẩn #{n.ToString("N")[..8]} 2026 – #{p.ToString("N")[..8]}", dc.Label(new DictionaryKbLabelLookup()));
+    }
+
+    [Fact]
+    public async Task Release_with_rows_cannot_be_deleted()
+    {
+        await f.ResetDatabaseAsync();
+        using var scope = f.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AdvisorDbContext>();
+        var r = new Release { SoHieu = 1, TaoBoi = "a" };
+        db.Release.Add(r);
+        db.Faq.Add(new Faq { CauHoi = "q", TraLoi = "a", ReleaseId = r.Id });
+        await db.SaveChangesAsync();
+        var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+            db.Database.ExecuteSqlRawAsync("DELETE FROM release"));
+        Assert.Equal("23503", ex.SqlState);
+    }
 }

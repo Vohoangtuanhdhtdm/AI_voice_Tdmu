@@ -8,5 +8,5 @@ public class ToHop : KbEntity
 
     private sealed record Key(string Ma, string Mon, string? CachDoc, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(Ma, Join(Mon), CachDoc, NguonTen, NguonUrl);
-    public override string Label() => $"Tổ hợp {Ma}";
+    public override string Label(IKbLabelLookup lookup) => $"Tổ hợp {Ma}";
 }

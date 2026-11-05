@@ -11,5 +11,5 @@ public class Nganh : KbEntity
 
     private sealed record Key(string MaNganh, string Ten, string TenGoiKhac, string? DonVi, string? MoTaNgan, bool ConTuyen, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(MaNganh, Ten, Join(TenGoiKhac), DonVi, MoTaNgan, ConTuyen, NguonTen, NguonUrl);
-    public override string Label() => $"Ngành {Ten} ({MaNganh})";
+    public override string Label(IKbLabelLookup lookup) => $"Ngành {Ten} ({MaNganh})";
 }

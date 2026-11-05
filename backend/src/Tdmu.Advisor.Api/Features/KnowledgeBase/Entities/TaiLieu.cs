@@ -12,5 +12,5 @@ public class TaiLieu : KbEntity
 
     private sealed record Key(string TieuDe, string DuongDanFile, int? NamApDung, TrangThaiTaiLieu TrangThai, string? Loi, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(TieuDe, DuongDanFile, NamApDung, TrangThai, Loi, NguonTen, NguonUrl);
-    public override string Label() => $"Tài liệu {TieuDe}";
+    public override string Label(IKbLabelLookup lookup) => $"Tài liệu {TieuDe}";
 }

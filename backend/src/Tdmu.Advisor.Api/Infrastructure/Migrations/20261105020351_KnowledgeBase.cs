@@ -73,7 +73,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -100,7 +100,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -127,7 +127,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -154,7 +154,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -182,7 +182,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -206,7 +206,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -234,7 +234,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -259,7 +259,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -285,7 +285,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -312,7 +312,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -340,7 +340,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -365,7 +365,7 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         column: x => x.release_id,
                         principalTable: "release",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(

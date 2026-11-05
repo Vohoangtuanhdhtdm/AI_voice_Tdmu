@@ -12,5 +12,5 @@ public class HocPhi : KbEntity
 
     private sealed record Key(Guid? NganhLid, int Nam, decimal Muc, DonViHocPhi DonVi, string? GhiChu, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(NganhLid, Nam, Muc, DonVi, GhiChu, NguonTen, NguonUrl);
-    public override string Label() => $"Học phí {Nam}";
+    public override string Label(IKbLabelLookup lookup) => $"Học phí {(NganhLid is { } n ? lookup.Nganh(n) : "chung")} {Nam}";
 }

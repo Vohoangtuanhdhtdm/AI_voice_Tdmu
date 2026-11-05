@@ -7,5 +7,5 @@ public class MuaTuyenSinh : KbEntity
 
     private sealed record Key(int Nam, bool LaHienTai, string? NguonTen, string? NguonUrl);
     public override object ContentKey() => new Key(Nam, LaHienTai, NguonTen, NguonUrl);
-    public override string Label() => $"Mùa tuyển sinh {Nam}";
+    public override string Label(IKbLabelLookup lookup) => $"Mùa tuyển sinh {Nam}";
 }
