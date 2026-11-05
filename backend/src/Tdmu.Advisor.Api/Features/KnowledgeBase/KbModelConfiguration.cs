@@ -47,6 +47,8 @@ public static class KbModelConfiguration
         {
             e.Property(x => x.Muc).HasColumnType("numeric(14,2)");
             e.Property(x => x.DonVi).HasConversion<string>();
+            // Khóa nghiệp vụ trùng với khóa upsert của import: một mức học phí cho mỗi (ngành hoặc chung, năm, đơn vị).
+            e.HasIndex(x => new { x.ReleaseId, x.NganhLid, x.Nam, x.DonVi }).IsUnique().AreNullsDistinct(false);
         });
 
         Kb<MocThoiGian>(mb, "moc_thoi_gian", _ => { });

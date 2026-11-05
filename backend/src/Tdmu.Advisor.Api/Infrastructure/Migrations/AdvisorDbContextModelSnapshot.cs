@@ -572,6 +572,12 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
 
                     NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("ReleaseId", "LogicalId"), false);
 
+                    b.HasIndex("ReleaseId", "NganhLid", "Nam", "DonVi")
+                        .IsUnique()
+                        .HasDatabaseName("ix_hoc_phi_release_id_nganh_lid_nam_don_vi");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("ReleaseId", "NganhLid", "Nam", "DonVi"), false);
+
                     b.ToTable("hoc_phi", (string)null);
                 });
 

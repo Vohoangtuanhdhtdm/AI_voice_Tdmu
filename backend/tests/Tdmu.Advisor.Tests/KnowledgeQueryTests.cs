@@ -124,4 +124,29 @@ public class KnowledgeQueryTests(ApiFactory f)
         Assert.Null(d.Nam);
         Assert.Empty(d.ChiTieu);
     }
+
+    [Fact]
+    public async Task Closed_major_is_marked_con_tuyen_false_and_hoc_phi_unit_is_a_string()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        await Create(c, "mua-tuyen-sinh", new { nam = 2026, laHienTai = true });
+        var n = await Create(c, "nganh", new { maNganh = "A1", ten = "Ngành A", conTuyen = false });
+        await Create(c, "nganh", new { maNganh = "B1", ten = "Ngành B" });
+        await Create(c, "hoc-phi", new { nganhLid = n, nam = 2026, muc = 500000, donVi = "TinChi" });
+        await Publish(c);
+
+        var list = (await Json(await f.CreateClient().GetAsync("/api/public/nganh"))).EnumerateArray().ToList();
+        Assert.Equal(2, list.Count); // không lọc: ngành ngừng tuyển vẫn hiện, kèm cờ
+        Assert.False(list.Single(x => x.GetProperty("maNganh").GetString() == "A1").GetProperty("conTuyen").GetBoolean());
+        Assert.True(list.Single(x => x.GetProperty("maNganh").GetString() == "B1").GetProperty("conTuyen").GetBoolean());
+
+        var j = await Json(await f.CreateClient().GetAsync("/api/public/nganh/A1"));
+        Assert.False(j.GetProperty("nganh").GetProperty("conTuyen").GetBoolean());
+        Assert.Equal("TinChi", j.GetProperty("hocPhi")[0].GetProperty("donVi").GetString());
+
+        using var scope = f.Services.CreateScope();
+        var q = scope.ServiceProvider.GetRequiredService<IKnowledgeQuery>();
+        Assert.False((await q.GetNganhAsync(KbScope.Published, "A1", default))!.Nganh.ConTuyen);
+    }
 }

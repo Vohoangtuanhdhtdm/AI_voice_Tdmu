@@ -220,4 +220,88 @@ public class KbCrudTests(ApiFactory f)
         Assert.True(errs.TryGetProperty("soLuong", out _));
         Assert.True(errs.TryGetProperty("nam", out _));
     }
+
+    [Fact]
+    public async Task Thang_diem_below_existing_draft_diem_is_rejected()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var n = await Nganh(c);
+        var pt = await PhuongThuc(c, "dgnl", "ĐGNL", 1200);
+        await Create(c, "diem-chuan", new { nganhLid = n, nam = 2026, phuongThucLid = pt, diem = 850 });
+        var res = await c.PutAsJsonAsync($"/api/admin/kb/phuong-thuc/{pt}", new { ma = "dgnl", ten = "ĐGNL", thangDiem = 30 });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        var msg = (await Json(res)).GetProperty("errors").GetProperty("thangDiem")[0].GetString();
+        Assert.Contains("850", msg);
+        var ok = await c.PutAsJsonAsync($"/api/admin/kb/phuong-thuc/{pt}", new { ma = "dgnl", ten = "ĐGNL", thangDiem = 850 });
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_phuong_thuc_without_thang_diem_keeps_existing()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var pt = await PhuongThuc(c, "dgnl", "ĐGNL", 1200);
+        var put = await c.PutAsJsonAsync($"/api/admin/kb/phuong-thuc/{pt}", new { ma = "dgnl", ten = "Đánh giá năng lực" });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        Assert.Equal(1200m, (await Json(await c.GetAsync($"/api/admin/kb/phuong-thuc/{pt}"))).GetProperty("thangDiem").GetDecimal());
+        var created = await Create(c, "phuong-thuc", new { ma = "thpt", ten = "THPT" });
+        Assert.Equal(30m, (await Json(await c.GetAsync($"/api/admin/kb/phuong-thuc/{created}"))).GetProperty("thangDiem").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Duplicate_hoc_phi_returns_409()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var n = await Nganh(c);
+        var chung = new { nam = 2026, muc = 400000, donVi = "TinChi" };
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/api/admin/kb/hoc-phi", chung)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync("/api/admin/kb/hoc-phi", chung with { muc = 450000 })).StatusCode);
+        var rieng = new { nganhLid = n, nam = 2026, muc = 500000, donVi = "TinChi" };
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/api/admin/kb/hoc-phi", rieng)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync("/api/admin/kb/hoc-phi", rieng)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/api/admin/kb/hoc-phi", rieng with { donVi = "Nam" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_without_la_hien_tai_or_con_tuyen_keeps_existing_values()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var mua = await Create(c, "mua-tuyen-sinh", new { nam = 2026, laHienTai = true });
+        Assert.Equal(HttpStatusCode.OK, (await c.PutAsJsonAsync($"/api/admin/kb/mua-tuyen-sinh/{mua}", new { nam = 2026, nguonTen = "Đề án" })).StatusCode);
+        Assert.True((await Json(await c.GetAsync($"/api/admin/kb/mua-tuyen-sinh/{mua}"))).GetProperty("laHienTai").GetBoolean());
+        var mua2 = await Create(c, "mua-tuyen-sinh", new { nam = 2027 });
+        Assert.False((await Json(await c.GetAsync($"/api/admin/kb/mua-tuyen-sinh/{mua2}"))).GetProperty("laHienTai").GetBoolean());
+
+        var n = await Create(c, "nganh", new { maNganh = "7480201", ten = "CNTT", conTuyen = false });
+        Assert.Equal(HttpStatusCode.OK, (await c.PutAsJsonAsync($"/api/admin/kb/nganh/{n}", new { maNganh = "7480201", ten = "Công nghệ thông tin" })).StatusCode);
+        Assert.False((await Json(await c.GetAsync($"/api/admin/kb/nganh/{n}"))).GetProperty("conTuyen").GetBoolean());
+        var n2 = await Create(c, "nganh", new { maNganh = "7340101", ten = "QTKD" });
+        Assert.True((await Json(await c.GetAsync($"/api/admin/kb/nganh/{n2}"))).GetProperty("conTuyen").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Moc_thoi_gian_ket_thuc_before_bat_dau_is_rejected()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var res = await c.PostAsJsonAsync("/api/admin/kb/moc-thoi-gian", new
+        {
+            nam = 2026, tenMoc = "Đăng ký xét tuyển",
+            batDau = new DateTimeOffset(2026, 7, 10, 0, 0, 0, TimeSpan.Zero),
+            ketThuc = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.True((await Json(res)).GetProperty("errors").TryGetProperty("ketThuc", out _));
+        var ok = await c.PostAsJsonAsync("/api/admin/kb/moc-thoi-gian", new
+        {
+            nam = 2026, tenMoc = "Đăng ký xét tuyển",
+            batDau = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
+            ketThuc = new DateTimeOffset(2026, 7, 10, 0, 0, 0, TimeSpan.Zero),
+        });
+        Assert.Equal(HttpStatusCode.Created, ok.StatusCode);
+    }
 }

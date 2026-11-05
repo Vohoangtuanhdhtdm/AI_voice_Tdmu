@@ -43,7 +43,7 @@ public static class KbCrudEndpoints
 
         r.MapPost("", async (TDto dto, AdvisorDbContext db, CancellationToken ct) =>
         {
-            var errors = await def.Validate(dto, db, ct);
+            var errors = await def.Validate(dto, null, db, ct);
             if (errors.Any) return ProblemResults.Invalid(errors.ToDictionary());
             var e = new TEntity();
             return await SaveAsync(db, def, dto, e, isNew: true, ct,
@@ -54,7 +54,7 @@ public static class KbCrudEndpoints
         {
             var e = await db.Set<TEntity>().FirstOrDefaultAsync(x => x.ReleaseId == null && x.LogicalId == logicalId, ct);
             if (e is null) return ProblemResults.NotFound();
-            var errors = await def.Validate(dto, db, ct);
+            var errors = await def.Validate(dto, e, db, ct);
             if (errors.Any) return ProblemResults.Invalid(errors.ToDictionary());
             return await SaveAsync(db, def, dto, e, isNew: false, ct, () => Results.Ok(def.ToDto(e)));
         });

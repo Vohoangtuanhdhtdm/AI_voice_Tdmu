@@ -1,5 +1,7 @@
 namespace Tdmu.Advisor.Api.Features.KnowledgeBase.Entities;
 
+/// <summary>Luôn tuần tự hóa JSON thành tên (ví dụ "TinChi"), không phải số, ở mọi API.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
 public enum TrangThaiTaiLieu { ChoXuLy, DangXuLy, Xong, ThatBai }
 
 public class TaiLieu : KbEntity

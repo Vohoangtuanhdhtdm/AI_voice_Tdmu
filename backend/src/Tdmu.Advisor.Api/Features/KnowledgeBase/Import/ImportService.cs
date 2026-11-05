@@ -35,9 +35,12 @@ public sealed class ImportService(AdvisorDbContext db)
         if (missing.Count > 0) throw new ImportFileException($"File thiếu cột bắt buộc: {string.Join(", ", missing)}");
 
         var lookups = new Lookups(
-            await db.Nganh.AsNoTracking().Where(x => x.ReleaseId == null).ToDictionaryAsync(x => x.MaNganh.Trim(), x => x.LogicalId, StringComparer.OrdinalIgnoreCase, ct),
-            await db.PhuongThuc.AsNoTracking().Where(x => x.ReleaseId == null).ToDictionaryAsync(x => x.Ma.Trim(), x => x.LogicalId, StringComparer.OrdinalIgnoreCase, ct),
-            await db.ToHop.AsNoTracking().Where(x => x.ReleaseId == null).ToDictionaryAsync(x => x.Ma.Trim(), x => x.LogicalId, StringComparer.OrdinalIgnoreCase, ct));
+            BuildLookup((await db.Nganh.AsNoTracking().Where(x => x.ReleaseId == null).Select(x => new { x.MaNganh, x.LogicalId }).ToListAsync(ct))
+                .Select(x => (x.MaNganh, x.LogicalId)), "Mã ngành"),
+            BuildLookup((await db.PhuongThuc.AsNoTracking().Where(x => x.ReleaseId == null).Select(x => new { x.Ma, x.LogicalId }).ToListAsync(ct))
+                .Select(x => (x.Ma, x.LogicalId)), "Mã phương thức"),
+            BuildLookup((await db.ToHop.AsNoTracking().Where(x => x.ReleaseId == null).Select(x => new { x.Ma, x.LogicalId }).ToListAsync(ct))
+                .Select(x => (x.Ma, x.LogicalId)), "Mã tổ hợp"));
 
         var rows = new List<ImportRow>();
         var dtos = new List<object>();
@@ -72,6 +75,22 @@ public sealed class ImportService(AdvisorDbContext db)
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return result;
+    }
+
+    /// <summary>Tra mã không phân biệt hoa thường. Hai mã trong bản nháp chỉ khác hoa thường thì không biết dòng file trỏ tới mã nào: báo lỗi cả file.</summary>
+    private static Dictionary<string, Guid> BuildLookup(IEnumerable<(string Code, Guid Lid)> rows, string label)
+    {
+        var map = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var codes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (code, lid) in rows)
+        {
+            var c = code.Trim();
+            if (!map.TryAdd(c, lid))
+                throw new ImportFileException(
+                    $"{label} '{c}' và '{codes[c]}' trong bản nháp chỉ khác nhau chữ hoa/thường nên không xác định được bản ghi; hãy sửa một trong hai mã trước khi nhập");
+            codes[c] = c;
+        }
+        return map;
     }
 
     // ---- đọc file ----
@@ -233,7 +252,7 @@ public sealed class ImportService(AdvisorDbContext db)
         {
             var dto = build(ctx);
             if (ctx.Errors.Count > 0) return (null, null); // lỗi đọc/tra mã: chưa validate tiếp
-            var errors = await def.Validate(dto, db, ct);
+            var errors = await def.Validate(dto, null, db, ct);
             if (errors.Any)
             {
                 ctx.Errors.AddRange(errors.ToDictionary().Values.SelectMany(x => x));
