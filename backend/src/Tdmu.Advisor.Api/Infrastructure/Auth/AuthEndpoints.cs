@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Tdmu.Advisor.Api.Features.KnowledgeBase.Crud;
 using Tdmu.Advisor.Api.Infrastructure.Http;
 
 namespace Tdmu.Advisor.Api.Infrastructure.Auth;
@@ -30,6 +31,7 @@ public static class AuthEndpoints
         });
 
         var admin = app.MapGroup("/api/admin").RequireAuthorization();
+        admin.MapKbEndpoints();
         admin.MapGet("/ping", () => Results.Ok(new { status = "ok" }));
     }
 }
