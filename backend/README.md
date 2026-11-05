@@ -7,6 +7,7 @@ API .NET 8 (minimal APIs) + PostgreSQL (pgvector). Admin nhập tri thức tuy�
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (`dotnet --version` phải ra `8.0.x`).
 - [Docker](https://docs.docker.com/get-docker/) (chạy PostgreSQL và chạy test).
 - Công cụ EF Core (chỉ khi cần tạo migration): `dotnet tool install --global dotnet-ef --version 8.*`
+  - Thư mục `~/.dotnet/tools` phải nằm trong `PATH`. Linux/macOS: `export PATH="$PATH:$HOME/.dotnet/tools"` (thêm vào `~/.bashrc` hoặc `~/.zshrc`). Windows: thêm `%USERPROFILE%\.dotnet\tools` vào biến môi trường `Path`.
 
 ## 2. Chạy PostgreSQL
 
@@ -73,6 +74,12 @@ Auth__JwtKey="<chuỗi tối thiểu 32 ký tự>" \
 dotnet ef migrations add <TenMigration> \
   --project src/Tdmu.Advisor.Api --startup-project src/Tdmu.Advisor.Api \
   -o Infrastructure/Migrations
+```
+
+`migrations add` không cần PostgreSQL đang chạy, nhưng `migrations remove` và `database update` thì cần (chạy `docker compose up -d postgres` ở mục 2). Hoàn tác migration vừa tạo (chưa áp):
+
+```bash
+dotnet ef migrations remove --project src/Tdmu.Advisor.Api --startup-project src/Tdmu.Advisor.Api
 ```
 
 Migration được áp tự động khi chạy ở Development/Testing; xem lại file sinh ra trước khi commit.
