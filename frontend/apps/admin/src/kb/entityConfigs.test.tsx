@@ -204,6 +204,41 @@ describe("entity configs", () => {
     expect(put).toHaveProperty("nganhLid", null);
   });
 
+  it("Chi_tieu_soLuong_accepts_vi_thousands", async () => {
+    let posted: unknown = null;
+    server.use(
+      json("/api/admin/kb/chi-tieu", [{ logicalId: "c1", nganhLid: "n1", nam: 2026, soLuong: 1500 }]),
+      json("/api/admin/kb/nganh", [NGANH]),
+      json("/api/admin/kb/phuong-thuc", [PT]),
+      http.post("/api/admin/kb/chi-tieu", async ({ request }) => {
+        posted = await request.json();
+        return HttpResponse.json({ logicalId: "c2" }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderSlug("chi-tieu");
+    // Bảng: số lượng có dấu chấm nghìn, năm thì không.
+    expect(await screen.findByText("1.500")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "2026" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Thêm mới" }));
+    const dialog = await screen.findByRole("dialog", { hidden: true });
+    await pick(user, dialog, "Ngành", "7480201 – Công nghệ thông tin");
+    await user.type(within(dialog).getByLabelText("Năm"), "2026");
+    await user.type(within(dialog).getByLabelText("Số lượng"), "1.200");
+    await user.click(screen.getByRole("button", { name: "Lưu" }));
+    expect(await screen.findByText("Đã lưu vào bản nháp")).toBeInTheDocument();
+    expect(posted).toEqual({ nganhLid: "n1", nam: 2026, soLuong: 1200, phuongThucLid: null });
+  });
+
+  it("Year_fields_are_not_grouped", () => {
+    for (const slug of KB_SLUGS) {
+      for (const f of entityConfigs[slug]!.fields) {
+        if (f.name === "nam") expect(f).toMatchObject({ kind: "int", grouping: false });
+      }
+    }
+  });
+
   it.each(KB_SLUGS)("All_ten_slugs_render: %s", async (slug) => {
     server.use(
       http.get("/api/admin/kb/:slug", () => HttpResponse.json([])),

@@ -15,7 +15,8 @@ export type RefKind = "nganh" | "phuong-thuc" | "to-hop";
 export type FieldConfig =
   | (FieldBase & { kind: "text" })
   | (FieldBase & { kind: "textarea" })
-  | (FieldBase & { kind: "int" })
+  /** grouping=false: hiển thị không có dấu chấm nghìn (dùng cho năm). Mặc định có. */
+  | (FieldBase & { kind: "int"; grouping?: boolean })
   | (FieldBase & { kind: "decimal"; precision: number })
   | (FieldBase & { kind: "money" })
   | (FieldBase & { kind: "bool" })

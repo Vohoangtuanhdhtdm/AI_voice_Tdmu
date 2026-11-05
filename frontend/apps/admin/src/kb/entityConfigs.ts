@@ -14,7 +14,7 @@ import type {
 } from "../api/types";
 import type { KbSlug } from "../layout/navigation";
 import type { EntityConfig, FieldConfig, RefKind, RefMaps } from "./entityConfig";
-import { formatDateTime, formatDecimal, formatMoney } from "../format";
+import { formatDateTime, formatDecimal, formatInt, formatMoney } from "../format";
 
 const DON_VI_HOC_PHI: { value: DonViHocPhi; label: string }[] = [
   { value: "TinChi", label: "Tín chỉ" },
@@ -82,7 +82,7 @@ const muaTuyenSinh = define<MuaTuyenSinhDto & KbRow>({
   title: "Mùa tuyển sinh",
   yearFilter: false,
   fields: [
-    { name: "nam", label: "Năm", kind: "int", required: true },
+    { name: "nam", label: "Năm", kind: "int", grouping: false, required: true },
     { name: "laHienTai", label: "Mùa hiện tại", kind: "bool" },
     ...NGUON,
   ],
@@ -117,7 +117,7 @@ const nganhToHop = define<NganhToHopDto & KbRow>({
   yearFilter: true,
   fields: [
     { name: "nganhLid", label: "Ngành", kind: "ref", ref: "nganh", required: true },
-    { name: "nam", label: "Năm", kind: "int", required: true },
+    { name: "nam", label: "Năm", kind: "int", grouping: false, required: true },
     { name: "toHopLid", label: "Tổ hợp", kind: "ref", ref: "to-hop", required: true },
     ...NGUON,
   ],
@@ -135,7 +135,7 @@ const diemChuan = define<DiemChuanDto & KbRow>({
   yearFilter: true,
   fields: [
     { name: "nganhLid", label: "Ngành", kind: "ref", ref: "nganh", required: true },
-    { name: "nam", label: "Năm", kind: "int", required: true },
+    { name: "nam", label: "Năm", kind: "int", grouping: false, required: true },
     { name: "phuongThucLid", label: "Phương thức", kind: "ref", ref: "phuong-thuc", required: true },
     { name: "diem", label: "Điểm", kind: "decimal", precision: 2, required: true },
     { name: "ghiChu", label: "Ghi chú", kind: "text" },
@@ -157,7 +157,7 @@ const chiTieu = define<ChiTieuDto & KbRow>({
   yearFilter: true,
   fields: [
     { name: "nganhLid", label: "Ngành", kind: "ref", ref: "nganh", required: true },
-    { name: "nam", label: "Năm", kind: "int", required: true },
+    { name: "nam", label: "Năm", kind: "int", grouping: false, required: true },
     { name: "phuongThucLid", label: "Phương thức", kind: "ref", ref: "phuong-thuc" },
     { name: "soLuong", label: "Số lượng", kind: "int", required: true },
     ...NGUON,
@@ -166,7 +166,7 @@ const chiTieu = define<ChiTieuDto & KbRow>({
     { title: "Ngành", render: (r, refs) => refName(refs, "nganh", r.nganhLid) },
     { title: "Năm", render: (r) => r.nam },
     { title: "Phương thức", render: (r, refs) => refName(refs, "phuong-thuc", r.phuongThucLid) },
-    { title: "Số lượng", render: (r) => r.soLuong },
+    { title: "Số lượng", render: (r) => formatInt(r.soLuong) },
   ],
   rowLabel: (r, refs) => [refs && refName(refs, "nganh", r.nganhLid), refs && refName(refs, "phuong-thuc", r.phuongThucLid), r.nam].filter(Boolean).join(" – "),
 });
@@ -177,7 +177,7 @@ const hocPhi = define<HocPhiDto & KbRow>({
   yearFilter: true,
   fields: [
     { name: "nganhLid", label: "Ngành", kind: "ref", ref: "nganh", placeholder: "Áp dụng chung" },
-    { name: "nam", label: "Năm", kind: "int", required: true },
+    { name: "nam", label: "Năm", kind: "int", grouping: false, required: true },
     { name: "muc", label: "Mức", kind: "money", required: true },
     { name: "donVi", label: "Đơn vị", kind: "enum", options: DON_VI_HOC_PHI, required: true },
     { name: "ghiChu", label: "Ghi chú", kind: "text" },
@@ -198,7 +198,7 @@ const mocThoiGian = define<MocThoiGianDto & KbRow>({
   title: "Lịch tuyển sinh",
   yearFilter: true,
   fields: [
-    { name: "nam", label: "Năm", kind: "int", required: true },
+    { name: "nam", label: "Năm", kind: "int", grouping: false, required: true },
     { name: "tenMoc", label: "Tên mốc", kind: "text", required: true },
     { name: "batDau", label: "Bắt đầu", kind: "datetime", required: true },
     { name: "ketThuc", label: "Kết thúc", kind: "datetime" },

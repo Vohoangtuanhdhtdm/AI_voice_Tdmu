@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Modal } from "antd";
 import { http, HttpResponse } from "msw";
@@ -185,5 +185,67 @@ describe("KbEntityPage fix round 1", () => {
     await user.click(screen.getByRole("button", { name: "go" }));
     await waitFor(() => expect(values).not.toBeNull());
     expect(values!.hocPhi ?? null).toBeNull();
+  });
+
+  function numberHarness(field: Parameters<typeof KbEntityForm>[0]["fields"][number], initial?: unknown) {
+    const onFinish = vi.fn();
+    function Harness() {
+      const [form] = Form.useForm();
+      return (
+        <>
+          <KbEntityForm
+            form={form}
+            fields={[field]}
+            initialValues={initial === undefined ? undefined : { [field.name]: initial }}
+            onFinish={onFinish}
+          />
+          <button onClick={() => form.submit()}>go</button>
+        </>
+      );
+    }
+    renderWithProviders(<Harness />);
+    return onFinish;
+  }
+
+  it("Int_with_comma_is_rejected_not_truncated", async () => {
+    const onFinish = numberHarness({ name: "soLuong", label: "Số lượng", kind: "int" });
+    const user = userEvent.setup({ delay: null });
+    await user.type(screen.getByLabelText("Số lượng"), "1,2");
+    await user.click(screen.getByRole("button", { name: "go" }));
+    expect(await screen.findByText("Số lượng không hợp lệ")).toBeInTheDocument();
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it("Money_with_decimal_part_is_rejected", async () => {
+    const onFinish = numberHarness({ name: "muc", label: "Mức", kind: "money" });
+    const user = userEvent.setup({ delay: null });
+    await user.type(screen.getByLabelText("Mức"), "1.200.000,50");
+    await user.click(screen.getByRole("button", { name: "go" }));
+    expect(await screen.findByText("Mức không hợp lệ")).toBeInTheDocument();
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it("Money_accepts_dot_thousands", async () => {
+    const onFinish = numberHarness({ name: "muc", label: "Mức", kind: "money" });
+    const user = userEvent.setup({ delay: null });
+    await user.type(screen.getByLabelText("Mức"), "1.200.000");
+    await user.click(screen.getByRole("button", { name: "go" }));
+    await waitFor(() => expect(onFinish).toHaveBeenCalledWith({ muc: 1200000 }));
+  });
+
+  it("Decimal_reads_grouped_dots_as_thousands", async () => {
+    const onFinish = numberHarness({ name: "thangDiem", label: "Thang điểm", kind: "decimal", precision: 2 });
+    const user = userEvent.setup({ delay: null });
+    await user.type(screen.getByLabelText("Thang điểm"), "1.200");
+    await user.click(screen.getByRole("button", { name: "go" }));
+    await waitFor(() => expect(onFinish).toHaveBeenCalledWith({ thangDiem: 1200 }));
+  });
+
+  it("Int_display_groups_quantity_but_not_year", () => {
+    numberHarness({ name: "soLuong", label: "Số lượng", kind: "int" }, 1200);
+    expect(screen.getByLabelText("Số lượng")).toHaveValue("1.200");
+    cleanup();
+    numberHarness({ name: "nam", label: "Năm", kind: "int", grouping: false }, 2026);
+    expect(screen.getByLabelText("Năm")).toHaveValue("2026");
   });
 });
