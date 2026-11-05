@@ -55,7 +55,12 @@ export function ImportPage() {
     },
     onError: (e) => {
       setFileError(errorText(e));
-      if (e instanceof ApiError && e.status === 400 && isPreview(e.body)) setPreview(e.body);
+      if (e instanceof ApiError && e.status === 400) {
+        // Backend trả { status, title, preview: {...} }; vẫn nhận dạng phẳng cho chắc.
+        const body = e.body as { preview?: unknown } | undefined;
+        const p = isPreview(body?.preview) ? body.preview : isPreview(body) ? body : null;
+        if (p) setPreview(p);
+      }
     },
   });
 
@@ -79,6 +84,10 @@ export function ImportPage() {
     }
   };
 
+  // Dòng lỗi lên đầu (sắp xếp ổn định, giữ thứ tự dòng trong mỗi nhóm).
+  const sortedRows = preview
+    ? [...preview.rows].sort((a, b) => Number(b.errors.length > 0) - Number(a.errors.length > 0))
+    : [];
   const valueKeys = preview ? [...new Set(preview.rows.flatMap((r) => Object.keys(r.values)))] : [];
   const columns = [
     { title: "Dòng", dataIndex: "rowNumber", key: "rowNumber" },
@@ -149,7 +158,7 @@ export function ImportPage() {
             size="small"
             rowKey="rowNumber"
             columns={columns}
-            dataSource={preview.rows}
+            dataSource={sortedRows}
             rowClassName={(r) => (r.errors.length > 0 ? "import-row-error" : "")}
             scroll={{ x: true }}
           />

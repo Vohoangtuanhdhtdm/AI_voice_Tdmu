@@ -127,6 +127,30 @@ describe("ImportPage", () => {
     server.use(
       http.post("/api/admin/import/diem-chuan/preview", () => HttpResponse.json(preview(0))),
       http.post("/api/admin/import/diem-chuan/commit", () =>
+        // Đúng thân phản hồi của backend: preview lồng trong khóa "preview".
+        HttpResponse.json(
+          { status: 400, title: "File còn dòng lỗi, chưa nhập dữ liệu nào", preview: preview(1) },
+          { status: 400 },
+        ),
+      ),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderWithProviders(<ImportPage />);
+    await user.upload(fileInput(), csv());
+    const btn = await screen.findByRole("button", { name: "Ghi vào bản nháp" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    await user.click(btn);
+    expect(
+      await screen.findByText("Điểm không được vượt quá thang điểm của phương thức (30)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("File còn dòng lỗi, chưa nhập dữ liệu nào")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ghi vào bản nháp" })).toBeDisabled();
+  });
+
+  it("Commit_400_flat_preview_body_is_also_accepted", async () => {
+    server.use(
+      http.post("/api/admin/import/diem-chuan/preview", () => HttpResponse.json(preview(0))),
+      http.post("/api/admin/import/diem-chuan/commit", () =>
         HttpResponse.json({ ...preview(1), title: "File có dòng lỗi" }, { status: 400 }),
       ),
     );
@@ -139,7 +163,18 @@ describe("ImportPage", () => {
     expect(
       await screen.findByText("Điểm không được vượt quá thang điểm của phương thức (30)"),
     ).toBeInTheDocument();
-    expect(screen.getByText("File có dòng lỗi")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ghi vào bản nháp" })).toBeDisabled();
+  });
+
+  it("Error_rows_are_listed_first", async () => {
+    server.use(http.post("/api/admin/import/diem-chuan/preview", () => HttpResponse.json(preview(1))));
+    const user = userEvent.setup({ delay: null });
+    renderWithProviders(<ImportPage />);
+    await user.upload(fileInput(), csv());
+    await screen.findByText("Điểm không được vượt quá thang điểm của phương thức (30)");
+    const rows = document.querySelectorAll("tbody tr.ant-table-row");
+    expect(rows[0]).toHaveTextContent("35");
+    expect(rows[0]).toHaveClass("import-row-error");
+    expect(rows[1]).toHaveTextContent("21,5");
   });
 });
