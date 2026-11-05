@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLocation } from "react-router-dom";
+import { http, HttpResponse } from "msw";
+import { server } from "../test/server";
 import { renderWithProviders } from "../test/render";
 import { AppRoutes } from "../App";
 import { authStore } from "../auth/authStore";
@@ -16,6 +18,7 @@ function Where() {
 }
 
 function renderAuthed(route: string) {
+  server.use(http.get("/api/admin/kb/nganh", () => HttpResponse.json([])));
   authStore.setSession({ accessToken: "t", expiresAt: new Date(Date.now() + 3600_000).toISOString() });
   return renderWithProviders(
     <>

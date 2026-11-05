@@ -17,6 +17,10 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 
+// jsdom không hỗ trợ getComputedStyle với pseudo-element (antd Modal gọi khi khóa cuộn).
+const realGetComputedStyle = window.getComputedStyle.bind(window);
+window.getComputedStyle = (elt: Element) => realGetComputedStyle(elt);
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   cleanup();
