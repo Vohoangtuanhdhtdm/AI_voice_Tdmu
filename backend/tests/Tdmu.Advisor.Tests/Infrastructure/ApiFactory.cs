@@ -51,12 +51,12 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await _respawner.ResetAsync(conn);
     }
 
-    // Respawn không hỗ trợ wildcard, nên liệt kê các bảng asp_net_* (Identity, snake_case) hiện có.
+    // Respawn không hỗ trợ wildcard, nên liệt kê các bảng AspNet* hiện có (IdentityDbContext đặt tên bảng tường minh, snake_case chỉ áp dụng cho cột, khóa, chỉ mục).
     private static async Task<Table[]> GetTablesToIgnoreAsync(NpgsqlConnection conn)
     {
         var ignore = new List<Table> { new("public", "__EFMigrationsHistory") };
         await using var cmd = new NpgsqlCommand(
-            "select table_name from information_schema.tables where table_schema = 'public' and table_name like 'asp_net%'", conn);
+            "select table_name from information_schema.tables where table_schema = 'public' and table_name like 'AspNet%'", conn);
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             ignore.Add(new Table("public", reader.GetString(0)));
