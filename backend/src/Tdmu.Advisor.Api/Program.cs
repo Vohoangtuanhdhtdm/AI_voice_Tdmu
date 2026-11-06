@@ -9,6 +9,7 @@ using System.Threading.RateLimiting;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Query;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Seed;
 using Tdmu.Advisor.Api.Infrastructure.Auth;
+using Tdmu.Advisor.Api.Infrastructure.Gemini;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +41,12 @@ builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOpt
 var auth = builder.Configuration.GetSection(AuthOptions.Section).Get<AuthOptions>() ?? new AuthOptions();
 if (auth.JwtKey.Length < 32)
     throw new InvalidOperationException("Auth:JwtKey phải có tối thiểu 32 ký tự (đặt qua biến môi trường hoặc user-secrets).");
+
+builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.Section));
+builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(EmbeddingOptions.Section));
+builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentOptions.Section));
+builder.Services.Configure<RagOptions>(builder.Configuration.GetSection(RagOptions.Section));
+builder.Services.AddHttpClient<IGeminiClient, GeminiRestClient>(c => c.Timeout = TimeSpan.FromSeconds(60));
 
 builder.Services.AddIdentityCore<IdentityUser>(o =>
     {

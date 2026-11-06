@@ -1,0 +1,63 @@
+using System.Security.Cryptography;
+using System.Text;
+using Tdmu.Advisor.Api.Infrastructure.Gemini;
+
+namespace Tdmu.Advisor.Tests.Infrastructure;
+
+/// <summary>Gemini giả cho test: embedding tất định, lượt stream soạn sẵn, không gọi mạng.</summary>
+public class FakeGeminiClient : IGeminiClient
+{
+    public const int Dimensions = 768;
+
+    public Func<string, float[]>? EmbedOverride { get; set; }
+    public Queue<IReadOnlyList<GeminiChunk>> Script { get; } = new();
+    public List<GeminiRequest> Requests { get; } = [];
+    public string PdfMarkdown { get; set; } = "";
+    public Exception? FailNext { get; set; }
+
+    public Task<IReadOnlyList<float[]>> EmbedAsync(IReadOnlyList<string> texts, EmbeddingTask task, CancellationToken ct)
+    {
+        ThrowIfFailing();
+        return Task.FromResult<IReadOnlyList<float[]>>(texts.Select(t => (EmbedOverride ?? HashEmbed)(t)).ToList());
+    }
+
+    public async IAsyncEnumerable<GeminiChunk> StreamGenerateAsync(GeminiRequest req, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        ThrowIfFailing();
+        Requests.Add(req);
+        if (!Script.TryDequeue(out var turn))
+            throw new InvalidOperationException("FakeGeminiClient.Script đã hết lượt soạn sẵn.");
+        foreach (var chunk in turn)
+        {
+            await Task.Yield();
+            yield return chunk;
+        }
+    }
+
+    public Task<string> PdfToMarkdownAsync(byte[] pdf, CancellationToken ct)
+    {
+        ThrowIfFailing();
+        return Task.FromResult(PdfMarkdown);
+    }
+
+    /// <summary>Băm từng từ (không phân biệt hoa thường) vào 768 chiều rồi chuẩn hóa L2: cùng tập từ thì cosine = 1.</summary>
+    public static float[] HashEmbed(string text)
+    {
+        var v = new float[Dimensions];
+        var words = text.ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => w.Trim('.', ',', ';', ':', '!', '?', '"', '(', ')')).Where(w => w.Length > 0).Distinct();
+        foreach (var w in words)
+            v[(int)(BitConverter.ToUInt32(SHA256.HashData(Encoding.UTF8.GetBytes(w)), 0) % Dimensions)] += 1f;
+        var norm = MathF.Sqrt(v.Sum(x => x * x));
+        if (norm > 0) for (var i = 0; i < v.Length; i++) v[i] /= norm;
+        return v;
+    }
+
+    private void ThrowIfFailing()
+    {
+        if (FailNext is null) return;
+        var ex = FailNext;
+        FailNext = null;
+        throw ex;
+    }
+}

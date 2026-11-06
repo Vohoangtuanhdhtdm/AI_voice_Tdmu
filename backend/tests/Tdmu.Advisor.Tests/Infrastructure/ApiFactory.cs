@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
+using Tdmu.Advisor.Api.Infrastructure.Gemini;
 using Respawn;
 using Respawn.Graph;
 using Testcontainers.PostgreSql;
@@ -16,6 +20,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string AdminPassword = "Admin#Test123";
 
     private Respawner? _respawner;
+
+    /// <summary>Gemini giả thay cho IGeminiClient; test soạn Script/EmbedOverride trên đối tượng này.</summary>
+    public FakeGeminiClient Gemini { get; } = new();
 
     public async Task InitializeAsync() => await _db.StartAsync();
 
@@ -33,6 +40,11 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Auth:SeedAdminEmail", AdminEmail);
         builder.UseSetting("Auth:SeedAdminPassword", AdminPassword);
         builder.UseSetting("RateLimit:PublicPermitsPerMinute", "100000");
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IGeminiClient>();
+            services.AddSingleton<IGeminiClient>(Gemini);
+        });
     }
 
     /// <summary>Xóa dữ liệu mọi bảng (trừ lịch sử migration và bảng Identity). Respawner tạo lười vì ở Task 1 chưa có bảng nào.</summary>
