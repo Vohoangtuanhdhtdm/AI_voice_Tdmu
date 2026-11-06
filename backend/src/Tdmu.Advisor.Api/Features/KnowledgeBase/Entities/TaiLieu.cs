@@ -11,8 +11,12 @@ public class TaiLieu : KbEntity
     public int? NamApDung { get; set; }
     public TrangThaiTaiLieu TrangThai { get; set; } = TrangThaiTaiLieu.ChoXuLy;
     public string? Loi { get; set; }
+    public string TenFileGoc { get; set; } = "";
+    public string LoaiNoiDung { get; set; } = "";
+    public long KichThuoc { get; set; }
 
-    private sealed record Key(string TieuDe, string DuongDanFile, int? NamApDung, TrangThaiTaiLieu TrangThai, string? Loi, string? NguonTen, string? NguonUrl);
-    public override object ContentKey() => new Key(TieuDe, DuongDanFile, NamApDung, TrangThai, Loi, NguonTen, NguonUrl);
+    // Trạng thái xử lý và lỗi do worker đặt nên không phải thay đổi nội dung.
+    private sealed record Key(string TieuDe, string DuongDanFile, int? NamApDung, string TenFileGoc, string LoaiNoiDung, long KichThuoc, string? NguonTen, string? NguonUrl);
+    public override object ContentKey() => new Key(TieuDe, DuongDanFile, NamApDung, TenFileGoc, LoaiNoiDung, KichThuoc, NguonTen, NguonUrl);
     public override string Label(IKbLabelLookup lookup) => $"Tài liệu {TieuDe}";
 }

@@ -171,7 +171,13 @@ public static class KbEntityDefinitions
 
     public static readonly KbEntityDefinition<Faq, FaqDto> Faq = new("faq",
         e => new(e.LogicalId, e.CauHoi, e.CachHoiKhac, e.TraLoi, e.ChuDe, e.NguonTen, e.NguonUrl),
-        (d, e) => { e.CauHoi = d.CauHoi!.Trim(); e.CachHoiKhac = d.CachHoiKhac ?? []; e.TraLoi = d.TraLoi!.Trim(); e.ChuDe = d.ChuDe; Src(d.NguonTen, d.NguonUrl, e); },
+        (d, e) =>
+        {
+            var cauHoi = d.CauHoi!.Trim();
+            var cachHoiKhac = d.CachHoiKhac ?? [];
+            // Embedding sinh từ câu hỏi và cách hỏi khác: đổi một trong hai thì phải embed lại (worker sẽ làm).
+            if (e.CauHoi != cauHoi || !e.CachHoiKhac.SequenceEqual(cachHoiKhac)) e.Embedding = null;
+            e.CauHoi = cauHoi; e.CachHoiKhac = cachHoiKhac; e.TraLoi = d.TraLoi!.Trim(); e.ChuDe = d.ChuDe; Src(d.NguonTen, d.NguonUrl, e); },
         (d, _, _, _) =>
         {
             var er = new KbErrors();

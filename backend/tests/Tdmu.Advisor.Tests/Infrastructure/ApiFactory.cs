@@ -21,6 +21,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     private Respawner? _respawner;
 
+    /// <summary>Thư mục tạm chứa file tải lên (Storage:Root) của factory này.</summary>
+    public string StorageRoot { get; } = Path.Combine(Path.GetTempPath(), "tdmu-uploads-" + Guid.NewGuid().ToString("N"));
+
     /// <summary>Gemini giả thay cho IGeminiClient; test soạn Script/EmbedOverride trên đối tượng này.</summary>
     public FakeGeminiClient Gemini { get; } = new();
 
@@ -30,6 +33,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         await base.DisposeAsync();
         await _db.DisposeAsync();
+        try { if (Directory.Exists(StorageRoot)) Directory.Delete(StorageRoot, true); } catch (IOException) { }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -40,6 +44,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Auth:SeedAdminEmail", AdminEmail);
         builder.UseSetting("Auth:SeedAdminPassword", AdminPassword);
         builder.UseSetting("RateLimit:PublicPermitsPerMinute", "100000");
+        builder.UseSetting("Storage:Root", StorageRoot);
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IGeminiClient>();

@@ -1,3 +1,4 @@
+using Tdmu.Advisor.Api.Features.KnowledgeBase.Documents;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Import;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Releases;
 using Microsoft.AspNetCore.Identity;
@@ -36,6 +37,7 @@ public static class AuthEndpoints
         admin.MapKbEndpoints();
         admin.MapReleaseEndpoints();
         admin.MapImportEndpoints();
+        admin.MapTaiLieuEndpoints();
         admin.MapGet("/ping", () => Results.Ok(new { status = "ok" }));
     }
 }

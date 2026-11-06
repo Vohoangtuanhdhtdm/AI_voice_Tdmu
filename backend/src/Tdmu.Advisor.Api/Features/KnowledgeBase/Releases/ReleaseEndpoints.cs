@@ -26,6 +26,7 @@ public static class ReleaseEndpoints
                 return Results.Created($"/api/admin/releases/{release.Id}", release);
             }
             catch (NoChangesException e) { return ProblemResults.Conflict(e.Message); }
+            catch (PendingProcessingException e) { return ProblemResults.Conflict(e.Message); }
         });
 
         r.MapPost("/{id:guid}/activate", async (Guid id, ReleaseService svc, ICurrentUser user, CancellationToken ct) =>

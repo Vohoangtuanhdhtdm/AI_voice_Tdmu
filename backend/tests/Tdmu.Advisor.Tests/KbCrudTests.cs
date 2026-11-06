@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -330,5 +332,38 @@ public class KbCrudTests(ApiFactory f)
             batDau = "2026-07-01T08:00:00+07:00", ketThuc = "2026-07-10T17:00:00+07:00",
         });
         Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+    }
+
+    [Fact]
+    public async Task Editing_faq_question_clears_embedding()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var res = await c.PostAsJsonAsync("/api/admin/kb/faq", new { cauHoi = "Học phí?", cachHoiKhac = new[] { "Bao nhiêu tiền?" }, traLoi = "A" });
+        var lid = (await Json(res)).GetProperty("logicalId").GetGuid();
+        async Task SetEmbedding()
+        {
+            using var scope = f.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Tdmu.Advisor.Api.Infrastructure.AdvisorDbContext>();
+            (await db.Faq.SingleAsync(x => x.LogicalId == lid)).Embedding = new Pgvector.Vector(new float[768]);
+            await db.SaveChangesAsync();
+        }
+        async Task<bool> HasEmbedding()
+        {
+            using var scope = f.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Tdmu.Advisor.Api.Infrastructure.AdvisorDbContext>();
+            return (await db.Faq.SingleAsync(x => x.LogicalId == lid)).Embedding is not null;
+        }
+        await SetEmbedding();
+
+        (await c.PutAsJsonAsync($"/api/admin/kb/faq/{lid}", new { cauHoi = "Học phí?", cachHoiKhac = new[] { "Bao nhiêu tiền?" }, traLoi = "B" })).EnsureSuccessStatusCode();
+        Assert.True(await HasEmbedding());
+
+        (await c.PutAsJsonAsync($"/api/admin/kb/faq/{lid}", new { cauHoi = "Học phí bao nhiêu?", cachHoiKhac = new[] { "Bao nhiêu tiền?" }, traLoi = "B" })).EnsureSuccessStatusCode();
+        Assert.False(await HasEmbedding());
+
+        await SetEmbedding();
+        (await c.PutAsJsonAsync($"/api/admin/kb/faq/{lid}", new { cauHoi = "Học phí bao nhiêu?", cachHoiKhac = new[] { "Khác" }, traLoi = "B" })).EnsureSuccessStatusCode();
+        Assert.False(await HasEmbedding());
     }
 }

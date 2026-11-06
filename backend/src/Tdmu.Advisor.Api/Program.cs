@@ -21,6 +21,7 @@ builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Releases.Rele
 builder.Services.AddScoped<IKnowledgeQuery, KnowledgeQuery>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.Conversations.ConversationStore>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Import.ImportService>();
+builder.Services.AddSingleton<Tdmu.Advisor.Api.Infrastructure.Storage.IFileStore, Tdmu.Advisor.Api.Infrastructure.Storage.LocalFileStore>();
 var permits = builder.Configuration.GetValue<int?>("RateLimit:PublicPermitsPerMinute") ?? 60;
 builder.Services.AddRateLimiter(o =>
 {

@@ -10,3 +10,5 @@ public record ReleaseDiff(IReadOnlyList<DiffItem> Items);
 public class NoChangesException() : Exception("Không có thay đổi để xuất bản");
 
 public class ReleaseNotFoundException() : Exception("Không tìm thấy release");
+
+public class PendingProcessingException() : Exception("Còn tài liệu hoặc FAQ đang xử lý, vui lòng chờ hoàn tất rồi xuất bản");

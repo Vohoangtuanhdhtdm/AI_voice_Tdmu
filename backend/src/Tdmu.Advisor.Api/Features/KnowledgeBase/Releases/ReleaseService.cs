@@ -72,6 +72,10 @@ public class ReleaseService(AdvisorDbContext db, AuditSuppression suppression)
         await LockAsync(ct);
         await LockTablesAsync("SHARE", ct);
         if (AfterTablesLocked is { } hook) await hook(ct);
+        // Worker chỉ xử lý bản nháp: xuất bản lúc này sẽ tạo release chứa tài liệu/FAQ không bao giờ tìm thấy được.
+        if (await db.TaiLieu.AnyAsync(x => x.ReleaseId == null && (x.TrangThai == TrangThaiTaiLieu.ChoXuLy || x.TrangThai == TrangThaiTaiLieu.DangXuLy), ct)
+            || await db.Faq.AnyAsync(x => x.ReleaseId == null && x.Embedding == null, ct))
+            throw new PendingProcessingException();
         var diff = await DiffAsync(ct); // Tính lại sau khi giữ khóa: yêu cầu đến sau sẽ thấy release vừa tạo.
         if (diff.Items.Count == 0) throw new NoChangesException();
 

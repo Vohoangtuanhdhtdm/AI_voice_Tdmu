@@ -94,7 +94,7 @@ public class ReleaseTests(ApiFactory f)
         await WithDb(async db =>
         {
             db.Faq.Add(new Faq { CauHoi = "Hỏi", TraLoi = "Đáp", Embedding = vec });
-            db.TaiLieu.Add(new TaiLieu { LogicalId = docLid, TieuDe = "Đề án", DuongDanFile = "a.pdf" });
+            db.TaiLieu.Add(new TaiLieu { LogicalId = docLid, TieuDe = "Đề án", DuongDanFile = "a.pdf", TrangThai = TrangThaiTaiLieu.Xong });
             db.TaiLieuChunk.Add(new TaiLieuChunk { TaiLieuLid = docLid, ThuTu = 1, NoiDung = "abc", Embedding = vec, Tsv = NpgsqlTsVector.Parse("'abc':1") });
             await db.SaveChangesAsync();
             return 0;

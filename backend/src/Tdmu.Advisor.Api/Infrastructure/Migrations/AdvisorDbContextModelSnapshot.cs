@@ -1095,6 +1095,15 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("duong_dan_file");
 
+                    b.Property<long>("KichThuoc")
+                        .HasColumnType("bigint")
+                        .HasColumnName("kich_thuoc");
+
+                    b.Property<string>("LoaiNoiDung")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("loai_noi_dung");
+
                     b.Property<Guid>("LogicalId")
                         .HasColumnType("uuid")
                         .HasColumnName("logical_id");
@@ -1118,6 +1127,11 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.Property<Guid?>("ReleaseId")
                         .HasColumnType("uuid")
                         .HasColumnName("release_id");
+
+                    b.Property<string>("TenFileGoc")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ten_file_goc");
 
                     b.Property<string>("TieuDe")
                         .IsRequired()
