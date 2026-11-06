@@ -1,0 +1,10 @@
+{
+  "name": "tdmu-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -C apps/admin dev",
+    "build": "pnpm -C apps/admin build",
+    "test": "pnpm -C apps/admin test",
+    "typecheck": "pnpm -C apps/admin typecheck"
+  }
+}

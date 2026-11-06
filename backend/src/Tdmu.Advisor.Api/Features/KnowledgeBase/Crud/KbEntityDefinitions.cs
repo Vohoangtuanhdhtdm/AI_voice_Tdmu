@@ -156,7 +156,7 @@ public static class KbEntityDefinitions
 
     public static readonly KbEntityDefinition<MocThoiGian, MocThoiGianDto> MocThoiGian = new("moc-thoi-gian",
         e => new(e.LogicalId, e.Nam, e.TenMoc, e.BatDau, e.KetThuc, e.PhuongThucLid, e.MoTa, e.NguonTen, e.NguonUrl),
-        (d, e) => { e.Nam = d.Nam!.Value; e.TenMoc = d.TenMoc!.Trim(); e.BatDau = d.BatDau!.Value; e.KetThuc = d.KetThuc; e.PhuongThucLid = d.PhuongThucLid; e.MoTa = d.MoTa; Src(d.NguonTen, d.NguonUrl, e); },
+        (d, e) => { e.Nam = d.Nam!.Value; e.TenMoc = d.TenMoc!.Trim(); e.BatDau = d.BatDau!.Value.ToUniversalTime(); e.KetThuc = d.KetThuc?.ToUniversalTime(); e.PhuongThucLid = d.PhuongThucLid; e.MoTa = d.MoTa; Src(d.NguonTen, d.NguonUrl, e); },
         async (d, _, db, ct) =>
         {
             var er = new KbErrors();

@@ -6,3 +6,7 @@ prototype/gemini_live/out/
 .superpowers/
 bin/
 obj/
+node_modules/
+dist/
+playwright-report/
+test-results/

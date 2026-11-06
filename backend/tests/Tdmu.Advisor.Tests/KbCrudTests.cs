@@ -304,4 +304,31 @@ public class KbCrudTests(ApiFactory f)
         });
         Assert.Equal(HttpStatusCode.Created, ok.StatusCode);
     }
+
+    [Fact]
+    public async Task Moc_thoi_gian_accepts_vietnam_offset_and_stores_utc()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        var post = await c.PostAsJsonAsync("/api/admin/kb/moc-thoi-gian", new
+        {
+            nam = 2026, tenMoc = "Đăng ký xét tuyển",
+            batDau = "2026-07-01T08:00:00+07:00", ketThuc = "2026-07-10T17:00:00+07:00",
+        });
+        Assert.Equal(HttpStatusCode.Created, post.StatusCode);
+        var lid = (await Json(post)).GetProperty("logicalId").GetGuid();
+
+        var get = await c.GetAsync($"/api/admin/kb/moc-thoi-gian/{lid}");
+        get.EnsureSuccessStatusCode();
+        var j = await Json(get);
+        Assert.Equal(new DateTimeOffset(2026, 7, 1, 1, 0, 0, TimeSpan.Zero), j.GetProperty("batDau").GetDateTimeOffset());
+        Assert.Equal(new DateTimeOffset(2026, 7, 10, 10, 0, 0, TimeSpan.Zero), j.GetProperty("ketThuc").GetDateTimeOffset());
+
+        var put = await c.PutAsJsonAsync($"/api/admin/kb/moc-thoi-gian/{lid}", new
+        {
+            nam = 2026, tenMoc = "Đăng ký xét tuyển",
+            batDau = "2026-07-01T08:00:00+07:00", ketThuc = "2026-07-10T17:00:00+07:00",
+        });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+    }
 }

@@ -3,7 +3,7 @@
 Danh sách này tổng hợp từ ledger thực thi kế hoạch 1 (review từng task và review cuối). Các kế hoạch sau phải xử lý trước khi dùng tới phần liên quan.
 
 ## Phải sửa ở đầu Kế hoạch 2
-- `moc-thoi-gian`: gửi `DateTimeOffset` có offset khác UTC (vd. `+07:00`) bị lỗi 500, vì Npgsql chỉ nhận UTC. Sửa bằng cách chuẩn hóa `ToUniversalTime()` trong Apply, kèm test.
+- `moc-thoi-gian`: gửi `DateTimeOffset` có offset khác UTC (vd. `+07:00`) bị lỗi 500, vì Npgsql chỉ nhận UTC. Sửa bằng cách chuẩn hóa `ToUniversalTime()` trong Apply, kèm test. **Đã sửa ở Kế hoạch 2, Task 1.**
 
 ## Trước khi triển khai thật (deploy)
 - Forwarded headers cho rate limit khi chạy sau reverse proxy. Nếu không có, mọi client dùng chung một bucket 60/phút. Cần thêm test cho trường hợp trả 429.
