@@ -50,6 +50,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Xóa dữ liệu mọi bảng (trừ lịch sử migration và bảng Identity). Respawner tạo lười vì ở Task 1 chưa có bảng nào.</summary>
     public async Task ResetDatabaseAsync()
     {
+        Gemini.Reset();
         await using var conn = new NpgsqlConnection(_db.GetConnectionString());
         await conn.OpenAsync();
         if (_respawner is null)

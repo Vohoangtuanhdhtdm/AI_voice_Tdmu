@@ -144,4 +144,77 @@ public class GeminiRestClientTests
             Make(h, key: "").EmbedAsync(["a"], EmbeddingTask.RetrievalQuery, default));
         Assert.Empty(h.Calls);
     }
+
+    [Fact]
+    public async Task Status_400_throws_unavailable_with_body_snippet()
+    {
+        var h = new StubHandler((_, _) => Json("""{"error":{"message":"Invalid argument xyz"}}""", HttpStatusCode.BadRequest));
+        var ex = await Assert.ThrowsAsync<GeminiUnavailableException>(() =>
+            Make(h).EmbedAsync(["a"], EmbeddingTask.RetrievalQuery, default));
+        Assert.Equal(400, ex.Status);
+        Assert.Contains("Invalid argument xyz", ex.Message);
+        Assert.DoesNotContain("test-key", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task Status_401_403_throw_not_configured(HttpStatusCode code)
+    {
+        var h = new StubHandler((_, _) => Json("{}", code));
+        await Assert.ThrowsAsync<GeminiNotConfiguredException>(() =>
+            Make(h).EmbedAsync(["a"], EmbeddingTask.RetrievalQuery, default));
+    }
+
+    private static async Task<List<GeminiChunk>> StreamAsync(string sse, GeminiRequest? req = null)
+    {
+        var h = new StubHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StringContent(sse, Encoding.UTF8, "text/event-stream") });
+        var list = new List<GeminiChunk>();
+        await foreach (var c in Make(h).StreamGenerateAsync(req ?? new GeminiRequest("s", [], new JsonArray()), default)) list.Add(c);
+        return list;
+    }
+
+    [Fact]
+    public async Task Stream_skips_non_json_data_lines()
+    {
+        var chunks = await StreamAsync("data: [DONE]\n\ndata: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"a\"}]}}]}\n\n");
+        Assert.Equal("a", (string?)Assert.Single(chunks).Parts[0]["text"]);
+    }
+
+    [Fact]
+    public async Task Stream_joins_event_split_across_data_lines()
+    {
+        var chunks = await StreamAsync("data: {\"candidates\":[{\"content\":\ndata: {\"parts\":[{\"text\":\"b\"}]}}]}\n\n");
+        Assert.Equal("b", (string?)Assert.Single(chunks).Parts[0]["text"]);
+    }
+
+    [Fact]
+    public async Task Stream_parses_final_event_without_trailing_newline()
+    {
+        var chunks = await StreamAsync("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"c\"}]},\"finishReason\":\"STOP\"}]}");
+        Assert.Equal("STOP", Assert.Single(chunks).FinishReason);
+    }
+
+    [Fact]
+    public async Task Stream_malformed_json_event_throws_unavailable()
+    {
+        await Assert.ThrowsAsync<GeminiUnavailableException>(() => StreamAsync("data: {\"candidates\":[\n\n"));
+    }
+
+    [Fact]
+    public async Task Stream_omits_tools_when_no_function_declarations()
+    {
+        var h = new StubHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("") });
+        await foreach (var _ in Make(h).StreamGenerateAsync(new GeminiRequest("s", [], new JsonArray()), default)) { }
+        Assert.Null(JsonNode.Parse(h.Calls[0].Body!)!["tools"]);
+    }
+
+    [Fact]
+    public async Task Embed_count_mismatch_throws_unavailable()
+    {
+        var h = new StubHandler((_, _) => Json(EmbedResponse(1)));
+        await Assert.ThrowsAsync<GeminiUnavailableException>(() =>
+            Make(h).EmbedAsync(["a", "b"], EmbeddingTask.RetrievalDocument, default));
+    }
 }

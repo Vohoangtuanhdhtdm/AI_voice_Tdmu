@@ -10,10 +10,23 @@ public class FakeGeminiClient : IGeminiClient
     public const int Dimensions = 768;
 
     public Func<string, float[]>? EmbedOverride { get; set; }
-    public Queue<IReadOnlyList<GeminiChunk>> Script { get; } = new();
-    public List<GeminiRequest> Requests { get; } = [];
+    private readonly object _lock = new();
+    private readonly List<GeminiRequest> _requests = [];
+    private Exception? _failNext;
+
+    public System.Collections.Concurrent.ConcurrentQueue<IReadOnlyList<GeminiChunk>> Script { get; } = new();
+    /// <summary>Bản sao (snapshot) các request đã ghi nhận.</summary>
+    public IReadOnlyList<GeminiRequest> Requests { get { lock (_lock) return _requests.ToList(); } }
     public string PdfMarkdown { get; set; } = "";
-    public Exception? FailNext { get; set; }
+    public Exception? FailNext { get { lock (_lock) return _failNext; } set { lock (_lock) _failNext = value; } }
+
+    public void Reset()
+    {
+        Script.Clear();
+        lock (_lock) { _requests.Clear(); _failNext = null; }
+        EmbedOverride = null;
+        PdfMarkdown = "";
+    }
 
     public Task<IReadOnlyList<float[]>> EmbedAsync(IReadOnlyList<string> texts, EmbeddingTask task, CancellationToken ct)
     {
@@ -24,7 +37,7 @@ public class FakeGeminiClient : IGeminiClient
     public async IAsyncEnumerable<GeminiChunk> StreamGenerateAsync(GeminiRequest req, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
         ThrowIfFailing();
-        Requests.Add(req);
+        lock (_lock) _requests.Add(req);
         if (!Script.TryDequeue(out var turn))
             throw new InvalidOperationException("FakeGeminiClient.Script đã hết lượt soạn sẵn.");
         foreach (var chunk in turn)
@@ -55,9 +68,8 @@ public class FakeGeminiClient : IGeminiClient
 
     private void ThrowIfFailing()
     {
-        if (FailNext is null) return;
-        var ex = FailNext;
-        FailNext = null;
-        throw ex;
+        Exception? ex;
+        lock (_lock) { ex = _failNext; _failNext = null; }
+        if (ex is not null) throw ex;
     }
 }
