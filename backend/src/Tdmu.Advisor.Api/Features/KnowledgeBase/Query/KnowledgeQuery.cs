@@ -89,13 +89,13 @@ public class KnowledgeQuery(AdvisorDbContext db) : IKnowledgeQuery
             ORDER BY exact DESC, contains DESC, sim DESC, ma_nganh
             """).ToListAsync(ct);
 
-        static NganhMatch M(NganhCandidate c) => new(c.LogicalId, c.MaNganh, c.Ten, c.ConTuyen);
-        if (rows.Any(r => r.Exact)) return rows.Where(r => r.Exact).Select(M).ToList();
-        if (rows.Any(r => r.Contains)) return rows.Where(r => r.Contains).Take(MaxContains).Select(M).ToList();
+        static Func<NganhCandidate, NganhMatch> M(NganhMatchKind kind) => c => new(c.LogicalId, c.MaNganh, c.Ten, c.ConTuyen, kind);
+        if (rows.Any(r => r.Exact)) return rows.Where(r => r.Exact).Select(M(NganhMatchKind.Exact)).ToList();
+        if (rows.Any(r => r.Contains)) return rows.Where(r => r.Contains).Take(MaxContains).Select(M(NganhMatchKind.Contains)).ToList();
         if (rows.Count == 0) return [];
         // Gần đúng: chỉ giữ các ngành gần bằng ngành giống nhất, để một lỗi gõ không bị ngành na ná làm thành câu hỏi lại.
         var best = rows[0].Sim;
-        return rows.Where(r => r.Sim >= best - SimilarityBand).Take(MaxSimilar).Select(M).ToList();
+        return rows.Where(r => r.Sim >= best - SimilarityBand).Take(MaxSimilar).Select(M(NganhMatchKind.Similar)).ToList();
     }
 
     public async Task<IReadOnlyList<PhuongThucRef>> ListPhuongThucAsync(KbScope scope, CancellationToken ct)

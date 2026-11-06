@@ -97,6 +97,20 @@ public static class ToolLookup
         };
     }
 
+    /// <summary><c>{ ma_nganh, ten }</c> của ngành đã phân giải, để mô hình thấy đang trả lời cho ngành nào.</summary>
+    public static JsonObject NganhJson(NganhMatch n) => new() { ["ma_nganh"] = n.MaNganh, ["ten"] = n.Ten };
+
+    /// <summary>Hướng dẫn xác nhận khi ngành chỉ khớp gần đúng; null nếu khớp chắc chắn.</summary>
+    public static string? XacNhanNganh(NganhMatch n, string tuKhoa) => n.Kind == NganhMatchKind.Similar
+        ? $"Đây là ngành gần đúng nhất với từ người dùng nói ('{tuKhoa}'): {n.Ten}. Hãy xác nhận đúng ngành với người dùng trước khi đọc số liệu."
+        : null;
+
+    public static string? Join(params string?[] huongDan)
+    {
+        var parts = huongDan.Where(h => !string.IsNullOrWhiteSpace(h)).ToList();
+        return parts.Count == 0 ? null : string.Join(' ', parts);
+    }
+
     public static JsonObject LuaChonNganh(IEnumerable<NganhMatch> found) => new()
     {
         ["lua_chon"] = new JsonArray(found.Select(n => (JsonNode)new JsonObject { ["ma_nganh"] = n.MaNganh, ["ten"] = n.Ten }).ToArray()),

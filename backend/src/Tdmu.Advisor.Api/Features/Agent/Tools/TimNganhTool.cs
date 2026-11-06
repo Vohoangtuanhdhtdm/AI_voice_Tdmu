@@ -20,6 +20,7 @@ public class TimNganhTool(IKnowledgeQuery kb) : IAgentTool
         if (found.Count > 1) return ToolResult.AskBack(ToolLookup.LuaChonNganh(found), ToolLookup.ChonNganhHuongDan);
         var n = found[0];
         return ToolResult.Ok(new JsonObject { ["ma_nganh"] = n.MaNganh, ["ten"] = n.Ten, ["con_tuyen"] = n.ConTuyen },
-            huongDan: n.ConTuyen ? null : "Ngành này hiện đã ngừng tuyển sinh; phải nói rõ điều này với người dùng.");
+            huongDan: ToolLookup.Join(ToolLookup.XacNhanNganh(n, tuKhoa),
+                n.ConTuyen ? null : "Ngành này hiện đã ngừng tuyển sinh; phải nói rõ điều này với người dùng."));
     }
 }

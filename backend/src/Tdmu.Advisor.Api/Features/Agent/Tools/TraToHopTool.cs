@@ -50,16 +50,17 @@ public class TraToHopTool(IKnowledgeQuery kb) : IAgentTool
 
         var result = new JsonObject
         {
-            ["nganh"] = new JsonObject { ["ma_nganh"] = ng.MaNganh, ["ten"] = ng.Ten },
+            ["nganh"] = ToolLookup.NganhJson(ng),
             ["to_hop"] = new JsonArray(list.Select(t => (JsonNode)ToHopJson(t.Ma, t.Mon, t.CachDoc)).ToArray()),
         };
-        var cachDoc = string.Join(", ", list.Select(t => t.CachDoc ?? t.Ma));
+        var cachDoc = $"Ngành {ng.Ten}: " + string.Join(", ", list.Select(t => t.CachDoc ?? t.Ma));
         if (toHopArg is not null)
         {
             // Danh sách tổ hợp của ngành đã có đủ, nên "không có trong danh sách" là câu trả lời xác định.
             var key = toHopArg.Replace(" ", "").ToUpperInvariant();
             result["co_xet_to_hop"] = list.Any(t => t.Ma.ToUpperInvariant() == key);
         }
-        return ToolResult.Ok(result, cachDoc, y, ToolResult.Sources(list.Select(t => (t.NguonTen, t.NguonUrl))));
+        return ToolResult.Ok(result, cachDoc, y, ToolResult.Sources(list.Select(t => (t.NguonTen, t.NguonUrl))),
+            ToolLookup.XacNhanNganh(ng, nganhArg));
     }
 }

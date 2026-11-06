@@ -31,8 +31,9 @@ public class TraDiemChuanTool(IKnowledgeQuery kb) : IAgentTool
         {
             ["phuong_thuc"] = r.PhuongThucTen, ["diem"] = r.Diem, ["thang_diem"] = r.ThangDiem, ["ghi_chu"] = r.GhiChu,
         }).ToArray());
-        var cachDoc = string.Join("; ", rows.Select(r => $"{VietnameseNumberReader.Read(r.Diem)} điểm ({r.PhuongThucTen})"));
-        return ToolResult.Ok(data,
-            cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))));
+        var cachDoc = $"Ngành {n.Ten}: " + string.Join("; ", rows.Select(r => $"{VietnameseNumberReader.Read(r.Diem)} điểm ({r.PhuongThucTen})"));
+        return ToolResult.Ok(new JsonObject { ["nganh"] = ToolLookup.NganhJson(n), ["diem_chuan"] = data },
+            cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))),
+            ToolLookup.XacNhanNganh(n, ToolArgs.Str(args, "nganh")!));
     }
 }

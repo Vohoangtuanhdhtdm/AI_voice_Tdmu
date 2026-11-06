@@ -15,7 +15,9 @@ public record NganhDetailView(
     IReadOnlyList<ToHopView> ToHop, IReadOnlyList<DiemChuanView> DiemChuan,
     IReadOnlyList<ChiTieuView> ChiTieu, IReadOnlyList<HocPhiView> HocPhi);
 
-public record NganhMatch(Guid LogicalId, string MaNganh, string Ten, bool ConTuyen);
+/// <summary>Mức khớp của <see cref="IKnowledgeQuery.FindNganhAsync"/>: Similar là gần đúng (pg_trgm), cần người dùng xác nhận.</summary>
+public enum NganhMatchKind { Exact, Contains, Similar }
+public record NganhMatch(Guid LogicalId, string MaNganh, string Ten, bool ConTuyen, NganhMatchKind Kind);
 public record PhuongThucRef(Guid LogicalId, string Ma, string Ten, decimal ThangDiem);
 public record ToHopRef(Guid LogicalId, string Ma, IReadOnlyList<string> Mon, string? CachDoc, string? NguonTen, string? NguonUrl);
 public record NganhOfToHopView(string MaNganh, string Ten, bool ConTuyen, string? NguonTen, string? NguonUrl);

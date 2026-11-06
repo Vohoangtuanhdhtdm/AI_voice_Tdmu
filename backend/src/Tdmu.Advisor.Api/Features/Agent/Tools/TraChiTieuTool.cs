@@ -30,7 +30,9 @@ public class TraChiTieuTool(IKnowledgeQuery kb) : IAgentTool
         // Bản ghi không gắn phương thức là chỉ tiêu chung của ngành.
         static string Label(ChiTieuRow r) => r.PhuongThucTen ?? "chỉ tiêu chung của ngành";
         var data = new JsonArray(rows.Select(r => (JsonNode)new JsonObject { ["phuong_thuc"] = Label(r), ["so_luong"] = r.SoLuong }).ToArray());
-        var cachDoc = string.Join("; ", rows.Select(r => $"{VietnameseNumberReader.Read(r.SoLuong)} chỉ tiêu ({Label(r)})"));
-        return ToolResult.Ok(data, cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))));
+        var cachDoc = $"Ngành {n.Ten}: " + string.Join("; ", rows.Select(r => $"{VietnameseNumberReader.Read(r.SoLuong)} chỉ tiêu ({Label(r)})"));
+        return ToolResult.Ok(new JsonObject { ["nganh"] = ToolLookup.NganhJson(n), ["chi_tieu"] = data },
+            cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))),
+            ToolLookup.XacNhanNganh(n, ToolArgs.Str(args, "nganh")!));
     }
 }

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using Pgvector;
 using Tdmu.Advisor.Api.Features.Agent.Tools;
 using Tdmu.Advisor.Api.Features.Conversations;
@@ -69,6 +70,30 @@ public class AgentToolsTests(ApiFactory f)
         Assert.Equal("7480201", (string)r["du_lieu"]!["ma_nganh"]!);
         Assert.Equal("Công nghệ thông tin", (string)r["du_lieu"]!["ten"]!);
         Assert.True((bool)r["du_lieu"]!["con_tuyen"]!);
+        // Chỉ khớp gần đúng (trigram) mới yêu cầu xác nhận lại ngành.
+        if (tuKhoa == "cong nghe thong tinn")
+            Assert.Equal("Đây là ngành gần đúng nhất với từ người dùng nói ('cong nghe thong tinn'): Công nghệ thông tin. Hãy xác nhận đúng ngành với người dùng trước khi đọc số liệu.", (string)r["huong_dan"]!);
+        else
+            Assert.Null((string?)r["huong_dan"]);
+    }
+
+    [Fact]
+    public async Task Similarity_match_echoes_nganh_and_asks_to_confirm()
+    {
+        await f.ResetDatabaseAsync();
+        var c = await AuthHelper.AdminClientAsync(f);
+        await Create(c, "mua-tuyen-sinh", new { nam = 2026, laHienTai = true });
+        var cntt = await Create(c, "nganh", new { maNganh = "7480201", ten = "Công nghệ thông tin" });
+        var thpt = await Create(c, "phuong-thuc", new { ma = "THPT", ten = "thi THPT", thangDiem = 30 });
+        await Create(c, "diem-chuan", new { nganhLid = cntt, nam = 2026, phuongThucLid = thpt, diem = 21.5 });
+        await Publish(c);
+
+        var r = await Invoke("tra_diem_chuan", new { nganh = "cong nghe sinh hoc" });
+        if (KetQua(r) == "khong_tim_thay") return; // dưới ngưỡng similarity: cũng chấp nhận được
+        Assert.Equal("ok", KetQua(r));
+        Assert.Equal("Công nghệ thông tin", (string)r["du_lieu"]!["nganh"]!["ten"]!);
+        Assert.StartsWith("Ngành Công nghệ thông tin: ", (string)r["cach_doc"]!);
+        Assert.Equal("Đây là ngành gần đúng nhất với từ người dùng nói ('cong nghe sinh hoc'): Công nghệ thông tin. Hãy xác nhận đúng ngành với người dùng trước khi đọc số liệu.", (string)r["huong_dan"]!);
     }
 
     [Fact]
@@ -104,7 +129,10 @@ public class AgentToolsTests(ApiFactory f)
         var r = await Invoke("tra_diem_chuan", new { nganh = "cntt" });
         Assert.Equal("ok", KetQua(r));
         Assert.Equal(2026, (int)r["nam_ap_dung"]!);
-        Assert.Equal(2, r["du_lieu"]!.AsArray().Count);
+        Assert.Equal("7480201", (string)r["du_lieu"]!["nganh"]!["ma_nganh"]!);
+        Assert.Equal("Công nghệ thông tin", (string)r["du_lieu"]!["nganh"]!["ten"]!);
+        Assert.Equal(2, r["du_lieu"]!["diem_chuan"]!.AsArray().Count);
+        Assert.StartsWith("Ngành Công nghệ thông tin: ", (string)r["cach_doc"]!);
         Assert.Contains("hai mươi mốt phẩy năm điểm", (string)r["cach_doc"]!);
         Assert.Contains("bảy trăm năm mươi điểm", (string)r["cach_doc"]!);
         var nguon = r["nguon"]!.AsArray();
@@ -114,12 +142,12 @@ public class AgentToolsTests(ApiFactory f)
 
         // Lọc theo phương thức (không dấu, theo tên) và năm truyền dạng chuỗi.
         var thptOnly = await Invoke("tra_diem_chuan", new { nganh = "cong nghe thong tin", phuong_thuc = "thi tot nghiep thpt" });
-        var row = Assert.Single(thptOnly["du_lieu"]!.AsArray())!;
+        var row = Assert.Single(thptOnly["du_lieu"]!["diem_chuan"]!.AsArray())!;
         Assert.Equal(21.5m, (decimal)row["diem"]!);
         Assert.Equal(30m, (decimal)row["thang_diem"]!);
         var y2025 = await Invoke("tra_diem_chuan", new { nganh = "7480201", nam = "2025" });
         Assert.Equal(2025, (int)y2025["nam_ap_dung"]!);
-        Assert.Equal(20m, (decimal)Assert.Single(y2025["du_lieu"]!.AsArray())!["diem"]!);
+        Assert.Equal(20m, (decimal)Assert.Single(y2025["du_lieu"]!["diem_chuan"]!.AsArray())!["diem"]!);
 
         // Phương thức không có trong CSDL: hỏi lại kèm danh sách phương thức.
         var unknownPt = await Invoke("tra_diem_chuan", new { nganh = "cntt", phuong_thuc = "học bạ" });
@@ -217,6 +245,79 @@ public class AgentToolsTests(ApiFactory f)
         Assert.False(string.IsNullOrWhiteSpace(r.HuongDan));
     }
 
+    /// <summary>Bỏ qua token, đang chạy truy vấn trên DbContext của nó khi registry đã trả lỗi, rồi còn ghi tiếp.</summary>
+    private sealed class StubbornDbTool(AdvisorDbContext db) : IAgentTool
+    {
+        public static TaskCompletionSource Done = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string Name => "db_cham";
+        public JsonObject Declaration => new() { ["name"] = Name, ["description"] = "x", ["parameters"] = new JsonObject { ["type"] = "object" } };
+        public async Task<ToolResult> InvokeAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+        {
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync("SELECT pg_sleep(4)", CancellationToken.None);
+                db.Set<Conversation>().Add(new Conversation { Id = Guid.NewGuid(), KenhDauTien = "tool", BatDau = DateTime.UtcNow });
+                await db.SaveChangesAsync(CancellationToken.None);
+                return ToolResult.Ok(new JsonObject());
+            }
+            finally { Done.TrySetResult(); }
+        }
+    }
+
+    /// <summary>Như chuyen_tiep_can_bo bị hết giờ giữa Add và SaveChanges.</summary>
+    private sealed class TicketAddThenSlowTool(AdvisorDbContext db) : IAgentTool
+    {
+        public string Name => "ticket_cham";
+        public JsonObject Declaration => new() { ["name"] = Name, ["description"] = "x", ["parameters"] = new JsonObject { ["type"] = "object" } };
+        public async Task<ToolResult> InvokeAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+        {
+            db.Set<Ticket>().Add(new Ticket { Id = Guid.NewGuid(), HoTen = "Ma", LienHe = "0912345678", LyDo = "x" });
+            await Task.Delay(TimeSpan.FromSeconds(5), ct);
+            await db.SaveChangesAsync(ct);
+            return ToolResult.Ok(new JsonObject());
+        }
+    }
+
+    [Fact]
+    public async Task Timed_out_tool_does_not_share_the_request_db_context()
+    {
+        await f.ResetDatabaseAsync();
+        StubbornDbTool.Done = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var app = f.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<IAgentTool, StubbornDbTool>()));
+        using var scope = app.Services.CreateScope();
+        var reg = scope.ServiceProvider.GetRequiredService<ToolRegistry>();
+        var db = scope.ServiceProvider.GetRequiredService<AdvisorDbContext>();
+
+        var r = await reg.InvokeAsync("db_cham", new JsonObject(), new ToolContext(KbScope.Draft, Guid.Empty), default);
+        Assert.Equal("loi_he_thong", r.KetQua);
+        // Tool vẫn đang chạy truy vấn; request dùng DbContext của mình ngay sau đó không được lỗi "second operation".
+        try
+        {
+            db.Set<Conversation>().Add(new Conversation { Id = Guid.NewGuid(), KenhDauTien = "chat", BatDau = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+            Assert.False(StubbornDbTool.Done.Task.IsCompleted);
+        }
+        finally { await StubbornDbTool.Done.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
+    }
+
+    [Fact]
+    public async Task Timed_out_ticket_is_not_saved_by_a_later_request_save()
+    {
+        await f.ResetDatabaseAsync();
+        await using var app = f.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<IAgentTool, TicketAddThenSlowTool>()));
+        using var scope = app.Services.CreateScope();
+        var reg = scope.ServiceProvider.GetRequiredService<ToolRegistry>();
+        var db = scope.ServiceProvider.GetRequiredService<AdvisorDbContext>();
+
+        var r = await reg.InvokeAsync("ticket_cham", new JsonObject(), new ToolContext(KbScope.Draft, Guid.Empty), default);
+        Assert.Equal("loi_he_thong", r.KetQua);
+        db.Set<Conversation>().Add(new Conversation { Id = Guid.NewGuid(), KenhDauTien = "chat", BatDau = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        using var check = f.Services.CreateScope();
+        Assert.Empty(check.ServiceProvider.GetRequiredService<AdvisorDbContext>().Set<Ticket>().ToList());
+    }
+
     [Fact]
     public async Task Unknown_tool_and_exception_return_loi_he_thong()
     {
@@ -240,14 +341,24 @@ public class AgentToolsTests(ApiFactory f)
         Assert.Equal("can_hoi_lai", KetQua(missing));
         Assert.Equal("Hãy hỏi họ tên và số điện thoại hoặc email của người dùng trước.", (string)missing["huong_dan"]!);
 
+        // Liên hệ không giống số điện thoại (≥ 9 chữ số) hay email: hỏi lại.
+        foreach (var bad in new[] { "abc", "0912 34" })
+        {
+            var r = await Invoke("chuyen_tiep_can_bo", new { ly_do = "x", ho_ten = "An", lien_he = bad }, conversationId: convId);
+            Assert.Equal("can_hoi_lai", KetQua(r));
+            Assert.Equal("Hãy hỏi họ tên và số điện thoại hoặc email của người dùng trước.", (string)r["huong_dan"]!);
+        }
+        Assert.Equal("ok", KetQua(await Invoke("chuyen_tiep_can_bo", new { ly_do = "x", ho_ten = "An", lien_he = "an@x.vn" }, conversationId: convId)));
+
         var ok = await Invoke("chuyen_tiep_can_bo", new { ly_do = "Hỏi học bổng", ho_ten = "Nguyễn Văn An", lien_he = "0912345678" }, conversationId: convId);
         Assert.Equal("ok", KetQua(ok));
         Assert.Equal("Cán bộ tuyển sinh sẽ liên hệ lại trong giờ hành chính.", (string)ok["du_lieu"]!["thong_bao"]!);
-        var ma = Guid.Parse((string)ok["du_lieu"]!["ma_yeu_cau"]!);
+        var ma = (string)ok["du_lieu"]!["ma_yeu_cau"]!;
+        Assert.Matches("^[0-9A-F]{8}$", ma);
 
         using var scope = f.Services.CreateScope();
-        var t = scope.ServiceProvider.GetRequiredService<AdvisorDbContext>().Set<Ticket>().Single();
-        Assert.Equal(ma, t.Id);
+        var t = scope.ServiceProvider.GetRequiredService<AdvisorDbContext>().Set<Ticket>().Single(x => x.LienHe == "0912345678");
+        Assert.Equal(t.Id.ToString("N")[..8].ToUpperInvariant(), ma);
         Assert.Equal(convId, t.ConversationId);
         Assert.Equal("Nguyễn Văn An", t.HoTen);
         Assert.Equal("0912345678", t.LienHe);
@@ -273,6 +384,8 @@ public class AgentToolsTests(ApiFactory f)
         }
         var diem = decls.Single(d => (string)d!["name"]! == "tra_diem_chuan")!["parameters"]!;
         Assert.Equal(["nganh"], diem["required"]!.AsArray().Select(x => (string)x!));
+        var chuyen = decls.Single(d => (string)d!["name"]! == "chuyen_tiep_can_bo")!["parameters"]!;
+        Assert.Equal(["ly_do"], chuyen["required"]!.AsArray().Select(x => (string)x!));
         Assert.True(diem["properties"]!.AsObject().ContainsKey("nam"));
         Assert.True(diem["properties"]!.AsObject().ContainsKey("phuong_thuc"));
     }
@@ -289,21 +402,25 @@ public class AgentToolsTests(ApiFactory f)
 
         var ct = await Invoke("tra_chi_tieu", new { nganh = "cntt" });
         Assert.Equal("ok", KetQua(ct));
-        Assert.Equal(2, ct["du_lieu"]!.AsArray().Count);
+        Assert.Equal("Công nghệ thông tin", (string)ct["du_lieu"]!["nganh"]!["ten"]!);
+        Assert.Equal(2, ct["du_lieu"]!["chi_tieu"]!.AsArray().Count);
+        Assert.StartsWith("Ngành Công nghệ thông tin: ", (string)ct["cach_doc"]!);
         Assert.Contains("một trăm hai mươi", (string)ct["cach_doc"]!);
         Assert.Contains("ba trăm", (string)ct["cach_doc"]!);
         Assert.Equal("Đề án 2026", (string)ct["nguon"]![0]!["ten"]!);
         var ctThpt = await Invoke("tra_chi_tieu", new { nganh = "cntt", phuong_thuc = "THPT" });
-        Assert.Equal(120, (int)Assert.Single(ctThpt["du_lieu"]!.AsArray())!["so_luong"]!);
+        Assert.Equal(120, (int)Assert.Single(ctThpt["du_lieu"]!["chi_tieu"]!.AsArray())!["so_luong"]!);
 
         var hp = await Invoke("tra_hoc_phi", new { nganh = "cntt", nam = 2026 });
         Assert.Equal("ok", KetQua(hp));
         Assert.Equal(2026, (int)hp["nam_ap_dung"]!);
-        Assert.Equal(2, hp["du_lieu"]!.AsArray().Count);
+        Assert.Equal("Công nghệ thông tin", (string)hp["du_lieu"]!["nganh"]!["ten"]!);
+        Assert.Equal(2, hp["du_lieu"]!["hoc_phi"]!.AsArray().Count);
+        Assert.StartsWith("Ngành Công nghệ thông tin: ", (string)hp["cach_doc"]!);
         Assert.Contains("một triệu hai trăm nghìn đồng", (string)hp["cach_doc"]!);
         Assert.Contains("hai mươi lăm triệu đồng", (string)hp["cach_doc"]!);
         var general = await Invoke("tra_hoc_phi", new { });
-        Assert.Equal(25000000m, (decimal)Assert.Single(general["du_lieu"]!.AsArray())!["muc"]!);
+        Assert.Equal(25000000m, (decimal)Assert.Single(general["du_lieu"]!["hoc_phi"]!.AsArray())!["muc"]!);
     }
 
     [Fact]
@@ -344,6 +461,8 @@ public class AgentToolsTests(ApiFactory f)
         var byNganh = await Invoke("tra_to_hop", new { nganh = "cntt" });
         Assert.Equal("ok", KetQua(byNganh));
         Assert.Equal(2, byNganh["du_lieu"]!["to_hop"]!.AsArray().Count);
+        Assert.Equal("Công nghệ thông tin", (string)byNganh["du_lieu"]!["nganh"]!["ten"]!);
+        Assert.StartsWith("Ngành Công nghệ thông tin: ", (string)byNganh["cach_doc"]!);
         Assert.Contains("A không không", (string)byNganh["cach_doc"]!);
 
         var byToHop = await Invoke("tra_to_hop", new { to_hop = "a00" });

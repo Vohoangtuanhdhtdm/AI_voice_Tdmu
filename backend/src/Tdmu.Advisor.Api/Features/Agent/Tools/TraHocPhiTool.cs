@@ -42,7 +42,10 @@ public class TraHocPhiTool(IKnowledgeQuery kb) : IAgentTool
         {
             ["muc"] = r.Muc, ["don_vi"] = DonVi(r.DonVi), ["ap_dung"] = Scope(r), ["ghi_chu"] = r.GhiChu,
         }).ToArray());
-        var cachDoc = string.Join("; ", rows.Select(r => $"{VietnameseNumberReader.ReadMoney(r.Muc)} một {DonVi(r.DonVi)} ({Scope(r)})"));
-        return ToolResult.Ok(data, cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))));
+        var cachDoc = (n is null ? "" : $"Ngành {n.Ten}: ") + string.Join("; ", rows.Select(r => $"{VietnameseNumberReader.ReadMoney(r.Muc)} một {DonVi(r.DonVi)} ({Scope(r)})"));
+        var result = new JsonObject { ["hoc_phi"] = data };
+        if (n is not null) result["nganh"] = ToolLookup.NganhJson(n);
+        return ToolResult.Ok(result, cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))),
+            n is null ? null : ToolLookup.XacNhanNganh(n, ToolArgs.Str(args, "nganh")!));
     }
 }
