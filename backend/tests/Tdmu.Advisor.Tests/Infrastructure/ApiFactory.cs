@@ -45,6 +45,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Auth:SeedAdminPassword", AdminPassword);
         builder.UseSetting("RateLimit:PublicPermitsPerMinute", "100000");
         builder.UseSetting("Storage:Root", StorageRoot);
+        builder.UseSetting("Ingestion:Enabled", "false");
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IGeminiClient>();
