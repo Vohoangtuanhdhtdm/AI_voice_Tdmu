@@ -272,6 +272,146 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Tdmu.Advisor.Api.Features.Conversations.Conversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("BatDau")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("bat_dau");
+
+                    b.Property<bool>("DongYGiongNoi")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("dong_y_giong_noi");
+
+                    b.Property<string>("KenhDauTien")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kenh_dau_tien");
+
+                    b.Property<bool>("LaHoiThu")
+                        .HasColumnType("boolean")
+                        .HasColumnName("la_hoi_thu");
+
+                    b.Property<Guid?>("ReleaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("release_id");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text")
+                        .HasColumnName("user_agent");
+
+                    b.HasKey("Id")
+                        .HasName("pk_conversation");
+
+                    b.ToTable("conversation", (string)null);
+                });
+
+            modelBuilder.Entity("Tdmu.Advisor.Api.Features.Conversations.Message", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("CoLoi")
+                        .HasColumnType("boolean")
+                        .HasColumnName("co_loi");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<short>("DanhGia")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0)
+                        .HasColumnName("danh_gia");
+
+                    b.Property<string>("Kenh")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kenh");
+
+                    b.Property<string>("LatencyMs")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("latency_ms");
+
+                    b.Property<string>("NoiDung")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("noi_dung");
+
+                    b.Property<DateTime>("TaoLuc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("tao_luc");
+
+                    b.Property<string>("ToolCalls")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tool_calls");
+
+                    b.Property<string>("VaiTro")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("vai_tro");
+
+                    b.HasKey("Id")
+                        .HasName("pk_message");
+
+                    b.HasIndex("ConversationId", "TaoLuc")
+                        .HasDatabaseName("ix_message_conversation_id_tao_luc");
+
+                    b.ToTable("message", (string)null);
+                });
+
+            modelBuilder.Entity("Tdmu.Advisor.Api.Features.Conversations.Ticket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<string>("HoTen")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ho_ten");
+
+                    b.Property<string>("LienHe")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("lien_he");
+
+                    b.Property<string>("LyDo")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ly_do");
+
+                    b.Property<DateTime>("TaoLuc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("tao_luc");
+
+                    b.Property<string>("TrangThai")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("moi")
+                        .HasColumnName("trang_thai");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket");
+
+                    b.HasIndex("ConversationId")
+                        .HasDatabaseName("ix_ticket_conversation_id");
+
+                    b.ToTable("ticket", (string)null);
+                });
+
             modelBuilder.Entity("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.AuditLog", b =>
                 {
                     b.Property<long>("Id")
@@ -1190,6 +1330,25 @@ namespace Tdmu.Advisor.Api.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_asp_net_user_tokens_asp_net_users_user_id");
+                });
+
+            modelBuilder.Entity("Tdmu.Advisor.Api.Features.Conversations.Message", b =>
+                {
+                    b.HasOne("Tdmu.Advisor.Api.Features.Conversations.Conversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_message_conversation_conversation_id");
+                });
+
+            modelBuilder.Entity("Tdmu.Advisor.Api.Features.Conversations.Ticket", b =>
+                {
+                    b.HasOne("Tdmu.Advisor.Api.Features.Conversations.Conversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_ticket_conversation_conversation_id");
                 });
 
             modelBuilder.Entity("Tdmu.Advisor.Api.Features.KnowledgeBase.Entities.ChiTieu", b =>

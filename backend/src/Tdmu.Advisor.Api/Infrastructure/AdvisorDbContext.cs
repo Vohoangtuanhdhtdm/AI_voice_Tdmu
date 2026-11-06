@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Tdmu.Advisor.Api.Features.Conversations;
 using Tdmu.Advisor.Api.Features.KnowledgeBase;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Entities;
 
@@ -22,6 +23,9 @@ public class AdvisorDbContext(DbContextOptions<AdvisorDbContext> options) : Iden
     public DbSet<TaiLieuChunk> TaiLieuChunk => Set<TaiLieuChunk>();
     public DbSet<Release> Release => Set<Release>();
     public DbSet<AuditLog> AuditLog => Set<AuditLog>();
+    public DbSet<Conversation> Conversation => Set<Conversation>();
+    public DbSet<Message> Message => Set<Message>();
+    public DbSet<Ticket> Ticket => Set<Ticket>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,5 +34,6 @@ public class AdvisorDbContext(DbContextOptions<AdvisorDbContext> options) : Iden
         modelBuilder.HasPostgresExtension("unaccent");
         modelBuilder.HasPostgresExtension("pg_trgm");
         KbModelConfiguration.Configure(modelBuilder);
+        ConversationModelConfiguration.Configure(modelBuilder);
     }
 }
