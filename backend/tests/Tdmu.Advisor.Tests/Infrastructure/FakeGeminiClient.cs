@@ -4,6 +4,9 @@ using Tdmu.Advisor.Api.Infrastructure.Gemini;
 
 namespace Tdmu.Advisor.Tests.Infrastructure;
 
+/// <summary>Đặt vào một lượt của <see cref="FakeGeminiClient.Script"/>: tới chunk này thì ném lỗi (lỗi giữa chừng khi stream).</summary>
+public record ThrowChunk(Exception Exception) : GeminiChunk([], null);
+
 /// <summary>Gemini giả cho test: embedding tất định, lượt stream soạn sẵn, không gọi mạng.</summary>
 public class FakeGeminiClient : IGeminiClient
 {
@@ -48,6 +51,7 @@ public class FakeGeminiClient : IGeminiClient
         foreach (var chunk in turn)
         {
             await Task.Yield();
+            if (chunk is ThrowChunk t) throw t.Exception;
             yield return chunk;
         }
     }

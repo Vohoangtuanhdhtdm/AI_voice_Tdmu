@@ -31,6 +31,7 @@ builder.Services.AddScoped<IAgentTool, TraLichTuyenSinhTool>();
 builder.Services.AddScoped<IAgentTool, TimKiemTriThucTool>();
 builder.Services.AddScoped<IAgentTool, ChuyenTiepCanBoTool>();
 builder.Services.AddScoped<ToolRegistry>();
+builder.Services.AddScoped<Tdmu.Advisor.Api.Features.Agent.Chat.ChatOrchestrator>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Import.ImportService>();
 builder.Services.AddSingleton<Tdmu.Advisor.Api.Infrastructure.Storage.IFileStore, Tdmu.Advisor.Api.Infrastructure.Storage.LocalFileStore>();
 var permits = builder.Configuration.GetValue<int?>("RateLimit:PublicPermitsPerMinute") ?? 60;
