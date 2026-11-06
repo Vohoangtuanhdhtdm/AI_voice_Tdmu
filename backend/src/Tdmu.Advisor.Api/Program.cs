@@ -19,6 +19,7 @@ builder.Services.AddScoped<AuditSuppression>();
 builder.Services.AddScoped<AuditInterceptor>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Releases.ReleaseService>();
 builder.Services.AddScoped<IKnowledgeQuery, KnowledgeQuery>();
+builder.Services.AddScoped<Tdmu.Advisor.Api.Features.Agent.Search.IKnowledgeSearch, Tdmu.Advisor.Api.Features.Agent.Search.KnowledgeSearch>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.Conversations.ConversationStore>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Import.ImportService>();
 builder.Services.AddSingleton<Tdmu.Advisor.Api.Infrastructure.Storage.IFileStore, Tdmu.Advisor.Api.Infrastructure.Storage.LocalFileStore>();
