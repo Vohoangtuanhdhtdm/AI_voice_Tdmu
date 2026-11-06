@@ -16,7 +16,8 @@ public class KnowledgeSearchTests(ApiFactory f)
 {
     private static float[] Vec(int i) { var v = new float[FakeGeminiClient.Dimensions]; v[i] = 1f; return v; }
 
-    private static float[] WithTinyNoise(float[] v, int i) { v[300 + i] = 0.001f; return v; }
+    // Đoạn thật (vector 2) có thành phần chung với truy vấn (vector 1) để nằm trong cùng vùng đồ thị HNSW với bản mồi, tránh phụ thuộc may rủi vào kết nối đồ thị.
+    private static float[] WithTinyNoise(float[] v, int i) { v[300 + i] = 0.001f; if (v[2] == 1f) v[1] = 0.5f; return v; }
 
     private async Task<T> Run<T>(Func<IServiceProvider, AdvisorDbContext, Task<T>> fn)
     {
@@ -174,6 +175,7 @@ public class KnowledgeSearchTests(ApiFactory f)
                 $"('[' || array_to_string(ARRAY(SELECT CASE WHEN i = {hot + 1} THEN 1 WHEN i = {hot2 + 1} THEN {second} ELSE random() * 0.05 + g * 0 END FROM generate_series(1, 768) i), ',') || ']')::vector");
             var filler = Noisy(1);
             await db.Database.ExecuteSqlRawAsync($"""
+                SELECT setseed(0.42);
                 INSERT INTO tai_lieu_chunk (id, logical_id, release_id, nguon_ten, nguon_url, cap_nhat_luc, tai_lieu_lid, thu_tu, noi_dung, vi_tri, embedding, tsv)
                 SELECT gen_random_uuid(), gen_random_uuid(), c.release_id, NULL, NULL, now(), c.tai_lieu_lid, g, c.noi_dung, c.vi_tri, {filler}, c.tsv
                 FROM tai_lieu_chunk c, generate_series(1, 50) g
@@ -181,6 +183,7 @@ public class KnowledgeSearchTests(ApiFactory f)
                 """);
             var faqFiller = Noisy(0, 0.3);
             await db.Database.ExecuteSqlRawAsync($"""
+                SELECT setseed(0.43);
                 INSERT INTO faq (id, logical_id, release_id, nguon_ten, nguon_url, cap_nhat_luc, cau_hoi, cach_hoi_khac, tra_loi, chu_de, embedding)
                 SELECT gen_random_uuid(), gen_random_uuid(), c.release_id, NULL, NULL, now(), c.cau_hoi, c.cach_hoi_khac, 'mồi', c.chu_de, {faqFiller}
                 FROM faq c, generate_series(1, 300) g
