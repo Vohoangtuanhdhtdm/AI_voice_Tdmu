@@ -20,9 +20,9 @@ public class GeminiRestClientTests
         }
     }
 
-    private static GeminiRestClient Make(StubHandler h, string key = "test-key") => new(
+    private static GeminiRestClient Make(StubHandler h, string key = "test-key", int idleSeconds = 30) => new(
         new HttpClient(h),
-        Options.Create(new GeminiOptions { ApiKey = key }),
+        Options.Create(new GeminiOptions { ApiKey = key, StreamIdleTimeoutSeconds = idleSeconds }),
         Options.Create(new EmbeddingOptions()),
         Options.Create(new AgentOptions()));
 
@@ -216,5 +216,55 @@ public class GeminiRestClientTests
         var h = new StubHandler((_, _) => Json(EmbedResponse(1)));
         await Assert.ThrowsAsync<GeminiUnavailableException>(() =>
             Make(h).EmbedAsync(["a", "b"], EmbeddingTask.RetrievalDocument, default));
+    }
+
+    /// <summary>Luồng không bao giờ trả byte nào (Gemini treo giữa chừng); chỉ dừng khi token bị hủy.</summary>
+    private sealed class StalledStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException("chỉ đọc bất đồng bộ");
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return 0;
+        }
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+            ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private static StubHandler StalledHandler() => new((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StreamContent(new StalledStream()) });
+
+    private static GeminiRequest SimpleRequest() => new("sys",
+        [new JsonObject { ["role"] = "user", ["parts"] = new JsonArray(new JsonObject { ["text"] = "hi" }) }], []);
+
+    [Fact]
+    public async Task Stream_stalled_mid_body_throws_unavailable_after_idle_timeout()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await Assert.ThrowsAsync<GeminiUnavailableException>(async () =>
+        {
+            await foreach (var _ in Make(StalledHandler(), idleSeconds: 1).StreamGenerateAsync(SimpleRequest(), default)) { }
+        });
+        Assert.InRange(sw.Elapsed.TotalSeconds, 0.9, 2.5);
+    }
+
+    [Fact]
+    public async Task Stream_caller_cancellation_is_not_mapped_to_unavailable()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        var ex = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in Make(StalledHandler(), idleSeconds: 30).StreamGenerateAsync(SimpleRequest(), cts.Token)) { }
+        });
+        Assert.IsNotType<GeminiUnavailableException>(ex);
     }
 }

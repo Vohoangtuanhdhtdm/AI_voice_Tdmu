@@ -51,6 +51,7 @@ public class FakeGeminiClient : IGeminiClient
         foreach (var chunk in turn)
         {
             await Task.Yield();
+            ct.ThrowIfCancellationRequested();
             if (chunk is ThrowChunk t) throw t.Exception;
             yield return chunk;
         }

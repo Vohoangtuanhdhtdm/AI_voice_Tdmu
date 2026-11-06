@@ -162,12 +162,13 @@ public class ChatOrchestratorTests(ApiFactory f)
         var events = await Run("Điểm chuẩn?");
 
         Assert.Equal(5, f.Gemini.Requests.Count);
-        Assert.Equal(10, events.OfType<ToolStatus>().Count());
+        // Lệnh gọi tool ở vòng cuối không được chạy (không còn vòng nào để mô hình đọc kết quả).
+        Assert.Equal(8, events.OfType<ToolStatus>().Count());
         Assert.Equal(new Delta(Fallback), Assert.Single(events.OfType<Delta>()));
         Assert.IsType<Done>(events[^1]);
         var msgs = await Messages(((Done)events[^1]).ConversationId);
         Assert.Equal(Fallback, msgs[1].NoiDung);
-        Assert.Equal(5, msgs[1].ToolCalls!.AsArray().Count);
+        Assert.Equal(4, msgs[1].ToolCalls!.AsArray().Count);
     }
 
     [Fact]
@@ -263,6 +264,74 @@ public class ChatOrchestratorTests(ApiFactory f)
         Assert.Equal("Em tên An, SĐT [SĐT], mail [EMAIL]", msgs[0].NoiDung);
         // Mô hình vẫn nhận nguyên văn để có thể chuyển tiếp cán bộ khi người dùng đồng ý.
         Assert.Contains("0912345678", (string)f.Gemini.Requests[0].Contents[^1]["parts"]![0]!["text"]!);
+    }
+
+    [Fact]
+    public async Task Tool_call_contact_masked_in_tool_calls_but_raw_in_ticket()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([Chunk(Call("chuyen_tiep_can_bo", new JsonObject
+        {
+            ["ly_do"] = "Tư vấn ngành CNTT, gửi thêm về an@test.vn",
+            ["ho_ten"] = "Nguyễn An",
+            ["lien_he"] = "0912345678",
+        }))]);
+        f.Gemini.Script.Enqueue([Chunk(Text("Mình đã chuyển cho cán bộ tuyển sinh."))]);
+
+        var events = await Run("Đồng ý, em là Nguyễn An, 0912345678, an@test.vn");
+
+        var convId = ((Done)events[^1]).ConversationId;
+        var msgs = await Messages(convId);
+        var stored = msgs[1].ToolCalls!.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        Assert.DoesNotContain("0912345678", stored);
+        Assert.DoesNotContain("an@test.vn", stored);
+        Assert.Equal("[SĐT]", (string)msgs[1].ToolCalls![0]!["args"]!["lien_he"]!);
+        Assert.Equal("Tư vấn ngành CNTT, gửi thêm về [EMAIL]", (string)msgs[1].ToolCalls![0]!["args"]!["ly_do"]!);
+        Assert.Equal("ok", (string)msgs[1].ToolCalls![0]!["ket_qua"]!);
+
+        using var s = f.Services.CreateScope();
+        var ticket = await s.ServiceProvider.GetRequiredService<AdvisorDbContext>().Set<Ticket>().AsNoTracking().SingleAsync(t => t.ConversationId == convId);
+        Assert.Equal("0912345678", ticket.LienHe);
+        Assert.Contains("an@test.vn", ticket.LyDo);
+    }
+
+    [Fact]
+    public async Task Text_from_different_rounds_is_separated()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([Chunk(Text("Để mình tra."), Call("tra_diem_chuan", new JsonObject { ["nganh"] = "CNTT" }))]);
+        f.Gemini.Script.Enqueue([Chunk(Text("Điểm chuẩn là "), Text("21,5."))]);
+
+        var events = await Run("Điểm chuẩn CNTT?");
+
+        Assert.Equal("Để mình tra.\nĐiểm chuẩn là 21,5.", string.Concat(events.OfType<Delta>().Select(d => d.Text)));
+        var msgs = await Messages(((Done)events[^1]).ConversationId);
+        Assert.Equal("Để mình tra.\nĐiểm chuẩn là 21,5.", msgs[1].NoiDung);
+    }
+
+    [Fact]
+    public async Task Cancelled_mid_stream_still_saves_flagged_assistant_message()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([Chunk(Text("Điểm chuẩn ")), Chunk(Text("là 21,5."))]);
+        using var cts = new CancellationTokenSource();
+        Guid? convId = null;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            using var s = f.Services.CreateScope();
+            var orch = s.ServiceProvider.GetRequiredService<ChatOrchestrator>();
+            await foreach (var e in orch.RunAsync(null, "Điểm chuẩn CNTT?", KbScope.Published, null, cts.Token))
+                if (e is Delta) cts.Cancel();
+        });
+
+        using (var s = f.Services.CreateScope())
+            convId = await s.ServiceProvider.GetRequiredService<AdvisorDbContext>().Set<Conversation>().Select(c => (Guid?)c.Id).SingleAsync();
+        var msgs = await Messages(convId!.Value);
+        Assert.Equal(2, msgs.Count);
+        Assert.Equal("assistant", msgs[1].VaiTro);
+        Assert.True(msgs[1].CoLoi);
+        Assert.Equal("Điểm chuẩn ", msgs[1].NoiDung);
     }
 
     [Fact]

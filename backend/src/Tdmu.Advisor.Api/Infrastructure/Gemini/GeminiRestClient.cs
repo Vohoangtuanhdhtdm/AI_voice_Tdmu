@@ -61,11 +61,22 @@ public class GeminiRestClient(
         await using var stream = await res.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream, Encoding.UTF8);
         var data = new StringBuilder();
+        // HttpClient.Timeout chỉ phủ tới lúc nhận header (ResponseHeadersRead): mỗi lần đọc có hạn chờ riêng.
+        var idle = TimeSpan.FromSeconds(Math.Max(1, gemini.Value.StreamIdleTimeoutSeconds));
         while (true)
         {
             string? line;
-            try { line = await reader.ReadLineAsync(ct); }
-            catch (IOException ex) { throw new GeminiUnavailableException(null, ex); }
+            // CTS mới cho mỗi lần đọc, để thời gian bên gọi xử lý chunk (giữa hai lần đọc) không bị tính.
+            using (var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                idleCts.CancelAfter(idle);
+                try { line = await reader.ReadLineAsync(idleCts.Token); }
+                catch (IOException ex) { throw new GeminiUnavailableException(null, ex); }
+                catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+                {
+                    throw new GeminiUnavailableException(null, new TimeoutException($"Không nhận được dữ liệu stream trong {idle.TotalSeconds:0} giây.", ex));
+                }
+            }
             if (line is not null && line.Length > 0)
             {
                 if (line.StartsWith("data:", StringComparison.Ordinal))

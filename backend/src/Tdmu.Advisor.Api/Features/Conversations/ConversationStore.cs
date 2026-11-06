@@ -39,13 +39,23 @@ public class ConversationStore(AdvisorDbContext db)
         var m = new Message
         {
             Id = Guid.NewGuid(), ConversationId = conversationId, VaiTro = vaiTro, Kenh = kenh,
-            NoiDung = PiiMasker.Mask(noiDung), ToolCalls = toolCalls, LatencyMs = latency,
+            NoiDung = PiiMasker.Mask(noiDung), ToolCalls = MaskStrings(toolCalls), LatencyMs = latency,
             CoLoi = coLoi, TaoLuc = DateTime.UtcNow,
         };
         db.Set<Message>().Add(m);
         await db.SaveChangesAsync(ct);
         return m;
     }
+
+    /// <summary>Bản sao của <paramref name="node"/> với mọi chuỗi đã che SĐT/email: liên hệ chỉ được lưu nguyên vẹn trong ticket.</summary>
+    private static JsonNode? MaskStrings(JsonNode? node) => node switch
+    {
+        null => null,
+        JsonObject o => new JsonObject(o.Select(kv => KeyValuePair.Create(kv.Key, MaskStrings(kv.Value)))),
+        JsonArray a => new JsonArray(a.Select(MaskStrings).ToArray()),
+        JsonValue v when v.TryGetValue<string>(out var str) => JsonValue.Create(PiiMasker.Mask(str)),
+        _ => node.DeepClone(),
+    };
 
     public async Task<Ticket> CreateTicketAsync(Guid? conversationId, string hoTen, string lienHe, string lyDo, CancellationToken ct)
     {

@@ -14,6 +14,7 @@ public class SystemPromptTests
         Assert.Contains("Mọi con số", p);
         Assert.Contains("cach_doc", p);
         Assert.Contains("chuyen_tiep_can_bo", p);
+        Assert.Contains("Để chuyển cán bộ, xin sự đồng ý và họ tên + số điện thoại/email trong cùng lượt; nếu lịch sử chỉ còn [SĐT] hoặc [EMAIL], hãy hỏi lại thông tin liên hệ, không truyền ký hiệu che vào công cụ.", p);
     }
 
     [Fact]

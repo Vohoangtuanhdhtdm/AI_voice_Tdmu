@@ -4,6 +4,8 @@ public class GeminiOptions
 {
     public const string Section = "Gemini";
     public string ApiKey { get; set; } = "";
+    /// <summary>Thời gian tối đa chờ dữ liệu mới khi đang đọc luồng stream; quá hạn thì coi Gemini không khả dụng.</summary>
+    public int StreamIdleTimeoutSeconds { get; set; } = 30;
 }
 
 public class EmbeddingOptions

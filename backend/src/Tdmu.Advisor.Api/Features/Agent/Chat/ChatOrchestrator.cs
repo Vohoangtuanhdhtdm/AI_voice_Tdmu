@@ -52,101 +52,134 @@ public class ChatOrchestrator(
         var sources = new List<NguonRef>();
         long? firstToken = null;
         var failed = false;
+        var saved = false;
 
-        for (var round = 0; round < maxRounds && !failed; round++)
+        // Chữ của vòng sau nối liền chữ vòng trước thì chèn xuống dòng để hai câu không dính nhau.
+        string Separate(string s) =>
+            text.Length > 0 && !char.IsWhiteSpace(text[^1]) && !char.IsWhiteSpace(s[0]) ? "\n" + s : s;
+        JsonObject Latency() => new() { ["first_token"] = firstToken, ["total"] = sw.ElapsedMilliseconds };
+
+        try
         {
-            var modelParts = new List<JsonObject>();
-            var calls = new List<JsonObject>();
-            var req = new GeminiRequest(systemInstruction, contents.ToList(), declarations, options.Value.ChatModel);
-
-            IAsyncEnumerator<GeminiChunk>? stream = null;
-            try
+            var needFallback = false;
+            for (var round = 0; round < maxRounds; round++)
             {
-                while (true)
-                {
-                    GeminiChunk chunk;
-                    try
-                    {
-                        stream ??= gemini.StreamGenerateAsync(req, ct).GetAsyncEnumerator(ct);
-                        if (!await stream.MoveNextAsync()) break;
-                        chunk = stream.Current;
-                    }
-                    catch (Exception ex) when (ex is GeminiUnavailableException or GeminiNotConfiguredException)
-                    {
-                        // ex.Message có thể chứa nội dung lỗi của Google: chỉ ghi log.
-                        logger.LogWarning(ex, "Gemini lỗi ở vòng {Round} của hội thoại {ConversationId}", round + 1, conv.Id);
-                        failed = true;
-                        break;
-                    }
+                var modelParts = new List<JsonObject>();
+                var calls = new List<JsonObject>();
+                var roundHasText = false;
+                var req = new GeminiRequest(systemInstruction, contents.ToList(), declarations, options.Value.ChatModel);
 
-                    foreach (var part in chunk.Parts)
+                IAsyncEnumerator<GeminiChunk>? stream = null;
+                try
+                {
+                    while (true)
                     {
-                        modelParts.Add(part);
-                        if (part["functionCall"] is JsonObject call)
-                            calls.Add(call);
-                        else if (part["text"] is JsonValue t && t.TryGetValue<string>(out var s) && s.Length > 0
-                                 && !(part["thought"] is JsonValue th && th.TryGetValue<bool>(out var isThought) && isThought))
+                        GeminiChunk chunk;
+                        try
                         {
-                            firstToken ??= sw.ElapsedMilliseconds;
-                            text.Append(s);
-                            yield return new Delta(s);
+                            stream ??= gemini.StreamGenerateAsync(req, ct).GetAsyncEnumerator(ct);
+                            if (!await stream.MoveNextAsync()) break;
+                            chunk = stream.Current;
+                        }
+                        catch (Exception ex) when (ex is GeminiUnavailableException or GeminiNotConfiguredException)
+                        {
+                            // ex.Message có thể chứa nội dung lỗi của Google: chỉ ghi log.
+                            logger.LogWarning(ex, "Gemini lỗi ở vòng {Round} của hội thoại {ConversationId}", round + 1, conv.Id);
+                            failed = true;
+                            break;
+                        }
+
+                        foreach (var part in chunk.Parts)
+                        {
+                            modelParts.Add(part);
+                            if (part["functionCall"] is JsonObject call)
+                                calls.Add(call);
+                            else if (part["text"] is JsonValue t && t.TryGetValue<string>(out var s) && s.Length > 0
+                                     && !(part["thought"] is JsonValue th && th.TryGetValue<bool>(out var isThought) && isThought))
+                            {
+                                var piece = roundHasText ? s : Separate(s);
+                                roundHasText = true;
+                                firstToken ??= sw.ElapsedMilliseconds;
+                                text.Append(piece);
+                                yield return new Delta(piece);
+                            }
                         }
                     }
                 }
-            }
-            finally
-            {
-                if (stream is not null) await stream.DisposeAsync();
+                finally
+                {
+                    if (stream is not null) await stream.DisposeAsync();
+                }
+
+                if (failed || calls.Count == 0) break;
+                // Vòng cuối: không còn lượt nào để mô hình đọc kết quả, nên không chạy tool (và không gom nguồn của chúng).
+                if (round == maxRounds - 1) { needFallback = true; break; }
+
+                // Giữ nguyên văn lượt của model (kể cả thoughtSignature) như Gemini 3 yêu cầu.
+                contents.Add(new JsonObject
+                {
+                    ["role"] = "model",
+                    ["parts"] = new JsonArray(modelParts.Select(p => (JsonNode)p.DeepClone()).ToArray()),
+                });
+                var responses = new JsonArray();
+                foreach (var call in calls)
+                {
+                    var name = (string?)call["name"] ?? "";
+                    var args = call["args"] as JsonObject ?? new JsonObject();
+                    yield return new ToolStatus(name, "start");
+                    var result = await tools.InvokeAsync(name, (JsonObject)args.DeepClone(), toolContext, ct);
+                    yield return new ToolStatus(name, "end");
+
+                    // ConversationStore che SĐT/email trong tool_calls trước khi lưu.
+                    toolCalls.Add(new JsonObject { ["name"] = name, ["args"] = args.DeepClone(), ["ket_qua"] = result.KetQua });
+                    foreach (var n in result.Nguon)
+                        if (!sources.Contains(n)) sources.Add(n);
+                    var fr = new JsonObject { ["name"] = name, ["response"] = result.ToJson() };
+                    if (call["id"] is { } id) fr["id"] = id.DeepClone();
+                    responses.Add(new JsonObject { ["functionResponse"] = fr });
+                }
+                contents.Add(new JsonObject { ["role"] = "user", ["parts"] = responses });
             }
 
-            if (failed || calls.Count == 0) break;
-
-            // Giữ nguyên văn lượt của model (kể cả thoughtSignature) như Gemini 3 yêu cầu.
-            contents.Add(new JsonObject
+            string content;
+            if (failed)
             {
-                ["role"] = "model",
-                ["parts"] = new JsonArray(modelParts.Select(p => (JsonNode)p.DeepClone()).ToArray()),
-            });
-            var responses = new JsonArray();
-            foreach (var call in calls)
-            {
-                var name = (string?)call["name"] ?? "";
-                var args = call["args"] as JsonObject ?? new JsonObject();
-                yield return new ToolStatus(name, "start");
-                var result = await tools.InvokeAsync(name, (JsonObject)args.DeepClone(), toolContext, ct);
-                yield return new ToolStatus(name, "end");
-
-                toolCalls.Add(new JsonObject { ["name"] = name, ["args"] = args.DeepClone(), ["ket_qua"] = result.KetQua });
-                foreach (var n in result.Nguon)
-                    if (!sources.Contains(n)) sources.Add(n);
-                var fr = new JsonObject { ["name"] = name, ["response"] = result.ToJson() };
-                if (call["id"] is { } id) fr["id"] = id.DeepClone();
-                responses.Add(new JsonObject { ["functionResponse"] = fr });
+                yield return new ChatError(BusyText);
+                content = text.Length > 0 ? text + "\n\n" + BusyText : BusyText;
             }
-            contents.Add(new JsonObject { ["role"] = "user", ["parts"] = responses });
+            else
+            {
+                if (text.Length == 0 || needFallback)
+                {
+                    var piece = Separate(FallbackText);
+                    firstToken ??= sw.ElapsedMilliseconds;
+                    text.Append(piece);
+                    yield return new Delta(piece);
+                }
+                if (sources.Count > 0) yield return new Citations(sources);
+                content = text.ToString();
+            }
+
+            // Không hủy được: nếu bị hủy giữa SaveChanges, khối finally sẽ lưu trùng.
+            var reply = await store.AddAsync(conv.Id, "assistant", Kenh, content, toolCalls, Latency(), failed, CancellationToken.None);
+            saved = true;
+            yield return new Done(conv.Id, reply.Id);
         }
-
-        string content;
-        if (failed)
+        finally
         {
-            yield return new ChatError(BusyText);
-            content = text.Length > 0 ? text + "\n\n" + BusyText : BusyText;
-        }
-        else
-        {
-            if (text.Length == 0)
+            // Bị hủy (client ngắt kết nối), bên gọi dừng lặp sớm hoặc lỗi bất ngờ: vẫn lưu phần đã có, đánh dấu lỗi.
+            if (!saved)
             {
-                firstToken ??= sw.ElapsedMilliseconds;
-                text.Append(FallbackText);
-                yield return new Delta(FallbackText);
+                try
+                {
+                    await store.AddAsync(conv.Id, "assistant", Kenh, text.ToString(), toolCalls, Latency(), true, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Không lưu được tin nhắn dở dang của hội thoại {ConversationId}", conv.Id);
+                }
             }
-            if (sources.Count > 0) yield return new Citations(sources);
-            content = text.ToString();
         }
-
-        var latency = new JsonObject { ["first_token"] = firstToken, ["total"] = sw.ElapsedMilliseconds };
-        var saved = await store.AddAsync(conv.Id, "assistant", Kenh, content, toolCalls, latency, failed, ct);
-        yield return new Done(conv.Id, saved.Id);
     }
 
     private static JsonObject TextContent(string role, string text) => new()
