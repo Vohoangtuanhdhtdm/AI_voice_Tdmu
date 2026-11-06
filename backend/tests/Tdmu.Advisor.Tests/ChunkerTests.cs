@@ -13,11 +13,11 @@ public class ChunkerTests
         var chunks = Chunker.Split(blocks);
 
         Assert.True(chunks.Count >= 2);
-        Assert.All(chunks, c => Assert.True(c.NoiDung.Length <= 3200));
+        Assert.All(chunks, c => Assert.True(c.NoiDung.Length <= 3200 + "Học phí\n\n".Length)); // Giới hạn áp dụng cho phần thân.
         for (var i = 1; i < chunks.Count; i++)
         {
             var tail = chunks[i - 1].NoiDung[^500..];
-            var start = chunks[i].NoiDung[..50];
+            var start = chunks[i].NoiDung["Học phí\n\n".Length..][..50];
             Assert.Contains(start, tail);
         }
         Assert.Equal(Enumerable.Range(1, chunks.Count), chunks.Select(c => c.ThuTu));
@@ -55,5 +55,12 @@ public class ChunkerTests
             Assert.True(c.NoiDung.Length <= 3200);
             Assert.EndsWith(".", c.NoiDung);
         });
+    }
+
+    [Fact]
+    public void Chunk_text_starts_with_heading()
+    {
+        var chunks = Chunker.Split([new ExtractedBlock("Ngành Dược 30 triệu.", null, "Tuyển sinh › Học phí")]);
+        Assert.StartsWith("Tuyển sinh › Học phí\n\nNgành Dược", chunks[0].NoiDung);
     }
 }

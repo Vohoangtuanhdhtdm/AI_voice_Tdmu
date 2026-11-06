@@ -37,6 +37,15 @@ public class IngestionService(
         return processed;
     }
 
+    /// <summary>Khi khởi động (giả định một instance): tài liệu nháp kẹt ở DangXuLy do lần chạy trước bị dừng đột ngột được đưa về ChoXuLy.</summary>
+    public async Task<int> ResetStuckDocumentsAsync(CancellationToken ct)
+    {
+        var n = await db.TaiLieu.Where(x => x.ReleaseId == null && x.TrangThai == TrangThaiTaiLieu.DangXuLy)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.TrangThai, TrangThaiTaiLieu.ChoXuLy), ct);
+        if (n > 0) log.LogWarning("Đã đặt lại {Count} tài liệu kẹt ở DangXuLy về ChoXuLy", n);
+        return n;
+    }
+
     private async Task ProcessOneAsync(Guid id, CancellationToken ct)
     {
         db.ChangeTracker.Clear();
@@ -59,7 +68,8 @@ public class IngestionService(
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "Xử lý tài liệu {Id} thất bại", id);
+            if (ex is GeminiNotConfiguredException) log.LogWarning("Xử lý tài liệu {Id} thất bại: chưa cấu hình Gemini API key", id);
+            else log.LogWarning(ex, "Xử lý tài liệu {Id} thất bại", id);
             await FailAsync(id, ex is GeminiNotConfiguredException ? "Chưa cấu hình Gemini API key" : "Lỗi xử lý: " + Shorten(ex.Message));
         }
     }
@@ -94,7 +104,7 @@ public class IngestionService(
     private async Task FailAsync(Guid id, string message)
     {
         db.ChangeTracker.Clear();
-        await db.TaiLieu.Where(x => x.Id == id)
+        await db.TaiLieu.Where(x => x.Id == id && x.TrangThai == TrangThaiTaiLieu.DangXuLy)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.TrangThai, TrangThaiTaiLieu.ThatBai).SetProperty(x => x.Loi, message), CancellationToken.None);
     }
 

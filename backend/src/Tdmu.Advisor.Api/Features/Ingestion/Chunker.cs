@@ -4,7 +4,7 @@ namespace Tdmu.Advisor.Api.Features.Ingestion;
 
 public record ChunkDraft(int ThuTu, string NoiDung, string ViTri);
 
-/// <summary>Chia các khối văn bản thành chunk ~2.400 ký tự (tối đa 3.200), chồng lấn 15% và không vượt qua ranh giới tiêu đề.</summary>
+/// <summary>Chia các khối (độ dài tối đa tính trên phần thân; tiêu đề được thêm vào đầu NoiDung, chồng lấn tính từ thân) văn bản thành chunk ~2.400 ký tự (tối đa 3.200), chồng lấn 15% và không vượt qua ranh giới tiêu đề.</summary>
 public static class Chunker
 {
     public const int TargetChars = 2400;
@@ -25,7 +25,8 @@ public static class Chunker
         {
             if (!hasContent) { current.Clear(); return; }
             var text = current.ToString();
-            result.Add(new ChunkDraft(result.Count + 1, text, ViTri(heading, page)));
+            var noiDung = string.IsNullOrWhiteSpace(heading) ? text : heading + Separator + text;
+            result.Add(new ChunkDraft(result.Count + 1, noiDung, ViTri(heading, page)));
             current.Clear();
             hasContent = false;
             if (keepOverlap) current.Append(OverlapTail(text));

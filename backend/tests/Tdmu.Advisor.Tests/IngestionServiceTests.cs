@@ -144,4 +144,32 @@ public class IngestionServiceTests(ApiFactory f)
         Assert.Equal(768, faqRow.Embedding!.ToArray().Length);
         Assert.Equal(0, await Run((sp, _) => sp.GetRequiredService<IngestionService>().EmbedPendingFaqsAsync(default)));
     }
+
+    [Fact]
+    public async Task Heading_is_part_of_chunk_text_and_searchable()
+    {
+        await f.ResetDatabaseAsync();
+        var lid = await AddDoc("## Học phí\n\nNgành Dược 30 triệu mỗi năm.");
+        await Process();
+        var c = await Run((_, db) => db.TaiLieuChunk.SingleAsync(x => x.TaiLieuLid == lid));
+        Assert.StartsWith("Học phí", c.NoiDung);
+        var matches = await Run((_, db) => db.Database
+            .SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM tai_lieu_chunk WHERE tsv @@ to_tsquery('simple', unaccent('hoc & phi'))").SingleAsync());
+        Assert.Equal(1, matches);
+    }
+
+    [Fact]
+    public async Task Stuck_documents_are_reset_and_failure_does_not_override_other_states()
+    {
+        await f.ResetDatabaseAsync();
+        var lid = await AddDoc(TwoSections);
+        await Run(async (_, db) =>
+        {
+            await db.TaiLieu.Where(x => x.LogicalId == lid).ExecuteUpdateAsync(s => s.SetProperty(x => x.TrangThai, TrangThaiTaiLieu.DangXuLy));
+            return 0;
+        });
+        Assert.Equal(1, await Run((sp, _) => sp.GetRequiredService<IngestionService>().ResetStuckDocumentsAsync(default)));
+        Assert.Equal(1, await Process());
+        Assert.Equal(TrangThaiTaiLieu.Xong, (await Run((_, db) => db.TaiLieu.SingleAsync(x => x.LogicalId == lid))).TrangThai);
+    }
 }
