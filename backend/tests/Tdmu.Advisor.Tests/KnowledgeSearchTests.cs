@@ -1,3 +1,4 @@
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Pgvector;
@@ -14,6 +15,8 @@ namespace Tdmu.Advisor.Tests;
 public class KnowledgeSearchTests(ApiFactory f)
 {
     private static float[] Vec(int i) { var v = new float[FakeGeminiClient.Dimensions]; v[i] = 1f; return v; }
+
+    private static float[] WithTinyNoise(float[] v, int i) { v[300 + i] = 0.001f; return v; }
 
     private async Task<T> Run<T>(Func<IServiceProvider, AdvisorDbContext, Task<T>> fn)
     {
@@ -38,7 +41,7 @@ public class KnowledgeSearchTests(ApiFactory f)
         db.TaiLieu.Add(doc);
         var i = 0;
         foreach (var (text, v) in chunks)
-            db.TaiLieuChunk.Add(new TaiLieuChunk { TaiLieuLid = doc.LogicalId, ThuTu = i++, NoiDung = text, ViTri = "Mục " + i, Embedding = new Vector(Vec(v)) });
+            db.TaiLieuChunk.Add(new TaiLieuChunk { TaiLieuLid = doc.LogicalId, ThuTu = i++, NoiDung = text, ViTri = "Mục " + i, Embedding = new Vector(WithTinyNoise(Vec(v), i)) });
         await db.SaveChangesAsync();
         await db.Database.ExecuteSqlRawAsync("UPDATE tai_lieu_chunk SET tsv = to_tsvector('simple', unaccent(noi_dung)) WHERE tsv IS NULL");
         return doc.LogicalId;
@@ -147,5 +150,78 @@ public class KnowledgeSearchTests(ApiFactory f)
         Assert.Equal("khong_co", r.Kind);
         Assert.Null(r.FaqAnswer);
         Assert.Empty(r.Hits);
+    }
+
+    [Fact]
+    public async Task Scoped_vector_search_survives_many_release_copies_on_hnsw()
+    {
+        await f.ResetDatabaseAsync();
+        Assert.Equal("0.8", (await Run((_, db) => db.Database.SqlQuery<string>(
+            $"SELECT extversion AS \"Value\" FROM pg_extension WHERE extname = 'vector'").SingleAsync()))[..3]);
+        await AddFaq("Học phí bao nhiêu?", "30 triệu", 0);
+        await AddDoc("Đề án", 2026, Enumerable.Range(0, 30).Select(i => ($"Đoạn thứ {i} zzz", 2)).ToArray());
+        for (var i = 0; i < 3; i++)
+        {
+            await AddFaq($"Câu hỏi phụ {i}", "x", 10 + i); // tạo thay đổi để mỗi lần xuất bản là một release mới
+            await Run(async (sp, _) => { await sp.GetRequiredService<ReleaseService>().PublishAsync("x", "u", default); return 0; });
+        }
+        await AddFaq("Câu hỏi nháp", "y", 20);
+        // Làm đầy release cũ bằng các bản sao khớp tuyệt đối với truy vấn để HNSW (post-filter) trả về toàn hàng của release khác.
+        await Run(async (_, db) =>
+        {
+            // Vector gần truy vấn nhưng có nhiễu (các bản trùng hệt làm đồ thị HNSW suy biến, không giống dữ liệu thật).
+            static string Noisy(int hot, double second = 0, int hot2 = 3) => FormattableString.Invariant(
+                $"('[' || array_to_string(ARRAY(SELECT CASE WHEN i = {hot + 1} THEN 1 WHEN i = {hot2 + 1} THEN {second} ELSE random() * 0.05 + g * 0 END FROM generate_series(1, 768) i), ',') || ']')::vector");
+            var filler = Noisy(1);
+            await db.Database.ExecuteSqlRawAsync($"""
+                INSERT INTO tai_lieu_chunk (id, logical_id, release_id, nguon_ten, nguon_url, cap_nhat_luc, tai_lieu_lid, thu_tu, noi_dung, vi_tri, embedding, tsv)
+                SELECT gen_random_uuid(), gen_random_uuid(), c.release_id, NULL, NULL, now(), c.tai_lieu_lid, g, c.noi_dung, c.vi_tri, {filler}, c.tsv
+                FROM tai_lieu_chunk c, generate_series(1, 50) g
+                WHERE c.release_id = (SELECT id FROM release ORDER BY so_hieu LIMIT 1)
+                """);
+            var faqFiller = Noisy(0, 0.3);
+            await db.Database.ExecuteSqlRawAsync($"""
+                INSERT INTO faq (id, logical_id, release_id, nguon_ten, nguon_url, cap_nhat_luc, cau_hoi, cach_hoi_khac, tra_loi, chu_de, embedding)
+                SELECT gen_random_uuid(), gen_random_uuid(), c.release_id, NULL, NULL, now(), c.cau_hoi, c.cach_hoi_khac, 'mồi', c.chu_de, {faqFiller}
+                FROM faq c, generate_series(1, 300) g
+                WHERE c.cau_hoi = 'Học phí bao nhiêu?' AND c.release_id = (SELECT id FROM release ORDER BY so_hieu LIMIT 1)
+                """);
+            await db.Database.ExecuteSqlRawAsync("ANALYZE tai_lieu_chunk");
+            await db.Database.ExecuteSqlRawAsync("ANALYZE faq");
+            return 0;
+        });
+
+        // Bảng nhỏ nên planner thích seq scan: dùng kết nối riêng tắt seq scan để bắt buộc đi qua chỉ mục HNSW thật.
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(f.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()["ConnectionStrings:Default"]!) { Options = "-c enable_seqscan=off" };
+        var dsb = new Npgsql.NpgsqlDataSourceBuilder(csb.ConnectionString);
+        dsb.UseVector();
+        await using var ds = dsb.Build();
+        await using var db2 = new AdvisorDbContext(new DbContextOptionsBuilder<AdvisorDbContext>()
+            .UseNpgsql(ds, o => o.UseVector()).UseSnakeCaseNamingConvention().Options);
+        using var svc = f.Services.CreateScope();
+        var search = new KnowledgeSearch(db2, svc.ServiceProvider.GetRequiredService<Api.Features.KnowledgeBase.Query.IKnowledgeQuery>(),
+            f.Gemini, svc.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Api.Infrastructure.Gemini.RagOptions>>());
+        foreach (var scope in new[] { KbScope.Published, KbScope.Draft })
+        {
+            f.Gemini.EmbedOverride = _ => { var q = Vec(0); q[3] = 0.3f; return q; }; // gần FAQ thật (cos ~0.96) nhưng gần bản mồi hơn
+            var faq = await search.SearchAsync("học phí", scope, default);
+            Assert.Equal("faq", faq.Kind);
+            Assert.Equal("30 triệu", faq.FaqAnswer);
+
+            f.Gemini.EmbedOverride = _ => Vec(1);
+            var chunks = await search.SearchAsync("qqq", scope, default);
+            Assert.True(chunks.Kind == "tai_lieu", "scope " + scope);
+            Assert.Equal(5, chunks.Hits.Count);
+        }
+    }
+
+    [Fact]
+    public async Task Blank_question_short_circuits_without_embedding()
+    {
+        await f.ResetDatabaseAsync();
+        var r = await Search("   ");
+        Assert.Equal("khong_co", r.Kind);
+        Assert.Empty(f.Gemini.Requests);
+        Assert.Equal(0, f.Gemini.EmbedCalls);
     }
 }

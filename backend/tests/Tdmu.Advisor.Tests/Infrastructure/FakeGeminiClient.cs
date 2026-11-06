@@ -10,6 +10,9 @@ public class FakeGeminiClient : IGeminiClient
     public const int Dimensions = 768;
 
     public Func<string, float[]>? EmbedOverride { get; set; }
+    private int _embedCalls;
+    /// <summary>Số lần EmbedAsync được gọi.</summary>
+    public int EmbedCalls => Volatile.Read(ref _embedCalls);
     private readonly object _lock = new();
     private readonly List<GeminiRequest> _requests = [];
     private Exception? _failNext;
@@ -25,11 +28,13 @@ public class FakeGeminiClient : IGeminiClient
         Script.Clear();
         lock (_lock) { _requests.Clear(); _failNext = null; }
         EmbedOverride = null;
+        Volatile.Write(ref _embedCalls, 0);
         PdfMarkdown = "";
     }
 
     public Task<IReadOnlyList<float[]>> EmbedAsync(IReadOnlyList<string> texts, EmbeddingTask task, CancellationToken ct)
     {
+        Interlocked.Increment(ref _embedCalls);
         ThrowIfFailing();
         return Task.FromResult<IReadOnlyList<float[]>>(texts.Select(t => (EmbedOverride ?? HashEmbed)(t)).ToList());
     }
