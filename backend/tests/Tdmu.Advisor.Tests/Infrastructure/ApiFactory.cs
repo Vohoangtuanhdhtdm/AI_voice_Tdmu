@@ -44,6 +44,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Auth:SeedAdminEmail", AdminEmail);
         builder.UseSetting("Auth:SeedAdminPassword", AdminPassword);
         builder.UseSetting("RateLimit:PublicPermitsPerMinute", "100000");
+        builder.UseSetting("RateLimit:ChatPermitsPerMinute", "100000");
         builder.UseSetting("Storage:Root", StorageRoot);
         builder.UseSetting("Ingestion:Enabled", "false");
         builder.ConfigureTestServices(services =>

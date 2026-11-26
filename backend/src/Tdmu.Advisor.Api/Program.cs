@@ -6,6 +6,7 @@ using Npgsql;
 using Tdmu.Advisor.Api.Infrastructure;
 using Tdmu.Advisor.Api.Infrastructure.Auditing;
 using System.Threading.RateLimiting;
+using Tdmu.Advisor.Api.Features.Agent.Chat;
 using Tdmu.Advisor.Api.Features.Agent.Tools;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Query;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Seed;
@@ -34,6 +35,7 @@ builder.Services.AddScoped<ToolRegistry>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.Agent.Chat.ChatOrchestrator>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.KnowledgeBase.Import.ImportService>();
 builder.Services.AddSingleton<Tdmu.Advisor.Api.Infrastructure.Storage.IFileStore, Tdmu.Advisor.Api.Infrastructure.Storage.LocalFileStore>();
+var chatPermits = builder.Configuration.GetValue<int?>("RateLimit:ChatPermitsPerMinute") ?? 20;
 var permits = builder.Configuration.GetValue<int?>("RateLimit:PublicPermitsPerMinute") ?? 60;
 builder.Services.AddRateLimiter(o =>
 {
@@ -41,6 +43,9 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy(PublicEndpoints.RateLimitPolicy, ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = permits, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    o.AddPolicy(Tdmu.Advisor.Api.Features.Agent.Chat.ChatEndpoints.RateLimitPolicy, ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = chatPermits, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(builder.Configuration.GetConnectionString("Default"));
 dataSourceBuilder.UseVector();
@@ -160,6 +165,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapAuthEndpoints();
 app.MapPublicEndpoints();
+app.MapChatEndpoints();
 
 app.Run();
 

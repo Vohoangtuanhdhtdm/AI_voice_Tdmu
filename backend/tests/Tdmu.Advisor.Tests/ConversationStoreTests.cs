@@ -67,4 +67,18 @@ public class ConversationStoreTests(ApiFactory f)
         Assert.True(c.LaHoiThu);
         Assert.Equal(c.Id, again.Id);
     }
+
+    [Fact]
+    public async Task GetOrCreate_with_id_of_other_scope_creates_new()
+    {
+        await f.ResetDatabaseAsync();
+        using var scope = f.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<ConversationStore>();
+        var draft = await store.GetOrCreateAsync(null, "chat", true, null, null, default);
+
+        var other = await store.GetOrCreateAsync(draft.Id, "chat", false, null, null, default);
+
+        Assert.NotEqual(draft.Id, other.Id);
+        Assert.False(other.LaHoiThu);
+    }
 }

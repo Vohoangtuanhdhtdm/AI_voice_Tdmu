@@ -11,7 +11,7 @@ public class ConversationStore(AdvisorDbContext db)
         if (id is { } existing)
         {
             var found = await db.Set<Conversation>().FirstOrDefaultAsync(c => c.Id == existing, ct);
-            if (found != null) return found;
+            if (found != null && found.LaHoiThu == laHoiThu) return found; // khác phạm vi (nháp/công khai) thì mở hội thoại mới
         }
         var c = new Conversation
         {
