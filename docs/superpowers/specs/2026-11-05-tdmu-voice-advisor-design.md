@@ -49,6 +49,7 @@ Xây dựng sản phẩm mẫu có thể bàn giao, gồm:
 | Kiến trúc | Modular monolith .NET 8 | Một ngôn ngữ backend, một lần triển khai, hợp nhóm 2 người |
 | Stack | ASP.NET Core 8 Web API · React TypeScript (Vite) · PostgreSQL + pgvector | Nhóm đã chọn |
 | SDK Gemini | `Google.GenAI` (.NET, bản 1.28.0 trở lên, có Live API) | Đã kiểm tra package có `ConnectAsync`, `SendRealtimeInput`, `SendToolResponse` |
+| Gemini cho kênh chat | Gọi qua REST (`generativelanguage.googleapis.com/v1beta`) sau interface `IGeminiClient` (`streamGenerateContent` SSE, `batchEmbedContents`). SDK `Google.GenAI` chỉ để dành cho kênh Live ở Kế hoạch 4 | Đơn giản, test được đầy đủ bằng fake, giữ nguyên các part thô kể cả `thoughtSignature` |
 | Nội dung trong KB | (A) dữ liệu có cấu trúc · (B) FAQ · (D) tài liệu tải lên · (E) lịch tuyển sinh | Đã duyệt |
 | Quy trình nội dung | Nháp → Xuất bản theo release, một vai trò, có audit log và "Hỏi thử" | Đã duyệt |
 | Số liệu | Chỉ trả lời qua tool truy vấn SQL, không qua RAG | Chống bịa số liệu |
