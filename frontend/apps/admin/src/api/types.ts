@@ -129,3 +129,18 @@ export interface LoginResponse {
   accessToken: string;
   expiresAt: string;
 }
+
+export type TrangThaiTaiLieu = "ChoXuLy" | "DangXuLy" | "Xong" | "ThatBai";
+
+export interface TaiLieuDto {
+  logicalId: string;
+  tieuDe: string;
+  tenFileGoc: string;
+  namApDung: number | null;
+  trangThai: TrangThaiTaiLieu;
+  loi: string | null;
+  soDoan: number | null;
+  capNhatLuc: string;
+  nguonTen: string | null;
+  nguonUrl: string | null;
+}

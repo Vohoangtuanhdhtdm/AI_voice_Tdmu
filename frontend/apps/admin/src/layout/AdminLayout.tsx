@@ -17,6 +17,7 @@ const items: MenuProps["items"] = [
     children: g.slugs.map(kbItem),
   })),
   ...KB_UNGROUPED.map(kbItem),
+  { key: "/tai-lieu", label: "Tài liệu" },
   { key: "/import", label: "Nhập dữ liệu" },
   { key: "/releases", label: "Xuất bản" },
 ];
