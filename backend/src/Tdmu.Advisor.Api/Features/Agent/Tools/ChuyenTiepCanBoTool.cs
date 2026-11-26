@@ -8,6 +8,9 @@ public class ChuyenTiepCanBoTool(ConversationStore store) : IAgentTool
 {
     public string Name => "chuyen_tiep_can_bo";
 
+    /// <summary>Số ticket tối đa của một hội thoại (chặn mô hình hoặc người dùng tạo ticket hàng loạt).</summary>
+    public const int MaxTicketsPerConversation = 3;
+
     public JsonObject Declaration { get; } = ToolDeclaration.Create("chuyen_tiep_can_bo",
         "Chuyển yêu cầu cho cán bộ tuyển sinh liên hệ lại. Chỉ gọi khi người dùng đã đồng ý và đã cho họ tên cùng số điện thoại hoặc email.",
         ("ly_do", "string", "Tóm tắt điều người dùng cần được tư vấn.", true),
@@ -25,6 +28,12 @@ public class ChuyenTiepCanBoTool(ConversationStore store) : IAgentTool
             return ToolResult.AskBack(null, "Hãy hỏi họ tên và số điện thoại hoặc email của người dùng trước.");
         var lyDo = ToolArgs.Str(args, "ly_do") ?? "Người dùng cần cán bộ tuyển sinh tư vấn";
         var conversationId = ctx.ConversationId == Guid.Empty ? (Guid?)null : ctx.ConversationId;
+        if (conversationId is { } cid && await store.CountTicketsAsync(cid, ct) >= MaxTicketsPerConversation)
+            return ToolResult.Ok(new JsonObject
+            {
+                ["da_co_yeu_cau"] = true,
+                ["thong_bao"] = "Cán bộ tuyển sinh sẽ liên hệ lại trong giờ hành chính theo yêu cầu đã gửi.",
+            }, huongDan: "Cuộc trò chuyện này đã có yêu cầu liên hệ gửi cán bộ tuyển sinh; không tạo thêm yêu cầu. Hãy báo người dùng là đã có yêu cầu và cán bộ sẽ liên hệ lại.");
         var t = await store.CreateTicketAsync(conversationId, hoTen, lienHe, lyDo, ct);
         return ToolResult.Ok(new JsonObject
         {

@@ -57,6 +57,9 @@ public class ConversationStore(AdvisorDbContext db)
         _ => node.DeepClone(),
     };
 
+    public Task<int> CountTicketsAsync(Guid conversationId, CancellationToken ct) =>
+        db.Set<Ticket>().AsNoTracking().CountAsync(t => t.ConversationId == conversationId, ct);
+
     public async Task<Ticket> CreateTicketAsync(Guid? conversationId, string hoTen, string lienHe, string lyDo, CancellationToken ct)
     {
         var t = new Ticket

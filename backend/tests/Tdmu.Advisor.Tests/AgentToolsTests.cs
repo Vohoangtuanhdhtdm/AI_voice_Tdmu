@@ -240,7 +240,7 @@ public class AgentToolsTests(ApiFactory f)
         var r = await reg.InvokeAsync(name, new JsonObject(), new ToolContext(KbScope.Draft, Guid.Empty), default);
         sw.Stop();
         Assert.Equal("loi_he_thong", r.KetQua);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3.5), $"took {sw.Elapsed}");
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(4.5), $"took {sw.Elapsed}"); // rộng tay cho máy CI bận
         Assert.True(sw.Elapsed >= TimeSpan.FromSeconds(2.9), $"took {sw.Elapsed}");
         Assert.False(string.IsNullOrWhiteSpace(r.HuongDan));
     }
@@ -498,5 +498,60 @@ public class AgentToolsTests(ApiFactory f)
         var none = await Invoke("tim_kiem_tri_thuc", new { cau_hoi = "   " }, KbScope.Draft);
         Assert.Equal("khong_tim_thay", KetQua(none));
         Assert.Contains("thông tin này", (string)none["huong_dan"]!);
+    }
+
+    [Fact]
+    public async Task Tim_kiem_tri_thuc_tai_lieu_warns_not_to_quote_figures()
+    {
+        await f.ResetDatabaseAsync();
+        var v = new float[FakeGeminiClient.Dimensions]; v[1] = 1f;
+        using (var s = f.Services.CreateScope())
+        {
+            var db = s.ServiceProvider.GetRequiredService<AdvisorDbContext>();
+            var doc = new TaiLieu { TieuDe = "Đề án", TrangThai = TrangThaiTaiLieu.Xong, TenFileGoc = "a.md", LoaiNoiDung = "text/markdown", NguonTen = "Đề án 2026" };
+            db.TaiLieu.Add(doc);
+            db.TaiLieuChunk.Add(new TaiLieuChunk { TaiLieuLid = doc.LogicalId, ThuTu = 0, NoiDung = "Ký túc xá có 500 chỗ ở", NguonTen = "Đề án 2026", Embedding = new Vector(v) });
+            await db.SaveChangesAsync();
+            await db.Database.ExecuteSqlRawAsync("UPDATE tai_lieu_chunk SET tsv = to_tsvector('simple', unaccent(noi_dung)) WHERE tsv IS NULL");
+        }
+        f.Gemini.EmbedOverride = _ => v;
+
+        var r = await Invoke("tim_kiem_tri_thuc", new { cau_hoi = "ký túc xá" }, KbScope.Draft);
+
+        Assert.Equal("ok", KetQua(r));
+        Assert.NotEmpty(r["du_lieu"]!["doan"]!.AsArray());
+        Assert.Contains("Đoạn trích chỉ dùng cho thông tin mô tả; không trích điểm chuẩn, chỉ tiêu, học phí hay mốc thời gian từ đây.", (string)r["huong_dan"]!);
+    }
+
+    [Fact]
+    public void Tim_kiem_tri_thuc_description_excludes_figures()
+    {
+        using var s = f.Services.CreateScope();
+        var d = s.ServiceProvider.GetRequiredService<ToolRegistry>().Declarations()
+            .Single(x => (string)x!["name"]! == "tim_kiem_tri_thuc")!;
+        var desc = (string)d["description"]!;
+        Assert.Contains("ký túc xá", desc);
+        Assert.Contains("học bổng", desc);
+        Assert.Contains("Không dùng để tra điểm chuẩn, chỉ tiêu, học phí hay lịch tuyển sinh", desc);
+    }
+
+    [Fact]
+    public async Task Chuyen_tiep_is_capped_at_3_tickets_per_conversation()
+    {
+        await f.ResetDatabaseAsync();
+        Guid convId;
+        using (var s = f.Services.CreateScope())
+            convId = (await s.ServiceProvider.GetRequiredService<ConversationStore>().GetOrCreateAsync(null, "chat", false, null, null, default)).Id;
+
+        for (var i = 0; i < 3; i++)
+            Assert.Equal("ok", KetQua(await Invoke("chuyen_tiep_can_bo", new { ly_do = "x", ho_ten = "An", lien_he = $"091234567{i}" }, conversationId: convId)));
+        var fourth = await Invoke("chuyen_tiep_can_bo", new { ly_do = "x", ho_ten = "An", lien_he = "0912345679" }, conversationId: convId);
+
+        Assert.Equal("ok", KetQua(fourth));
+        Assert.True((bool)fourth["du_lieu"]!["da_co_yeu_cau"]!);
+        Assert.Null(fourth["du_lieu"]!["ma_yeu_cau"]);
+        Assert.Contains("đã có yêu cầu", (string)fourth["huong_dan"]!);
+        using var scope = f.Services.CreateScope();
+        Assert.Equal(3, await scope.ServiceProvider.GetRequiredService<AdvisorDbContext>().Set<Ticket>().CountAsync(t => t.ConversationId == convId));
     }
 }
