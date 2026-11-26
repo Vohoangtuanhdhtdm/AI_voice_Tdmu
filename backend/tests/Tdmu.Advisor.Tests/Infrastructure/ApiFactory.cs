@@ -27,6 +27,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Gemini giả thay cho IGeminiClient; test soạn Script/EmbedOverride trên đối tượng này.</summary>
     public FakeGeminiClient Gemini { get; } = new();
 
+    /// <summary>false (mặc định): thay IGeminiClient bằng <see cref="Gemini"/>. true: giữ GeminiRestClient thật
+    /// (chỉ dùng cho smoke test <c>GeminiLive</c>, xem <see cref="RealGeminiApiFactory"/>).</summary>
+    public virtual bool UseRealGemini => false;
+
     public async Task InitializeAsync() => await _db.StartAsync();
 
     async Task IAsyncLifetime.DisposeAsync()
@@ -47,6 +51,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("RateLimit:ChatPermitsPerMinute", "100000");
         builder.UseSetting("Storage:Root", StorageRoot);
         builder.UseSetting("Ingestion:Enabled", "false");
+        if (UseRealGemini) return;
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IGeminiClient>();

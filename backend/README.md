@@ -65,6 +65,8 @@ dotnet test backend
 
 Test dùng Testcontainers nên **cần Docker đang chạy**; mỗi lần chạy tự dựng một PostgreSQL riêng, không đụng đến CSDL local của bạn.
 
+Test tự động không gọi Gemini thật (dùng `FakeGeminiClient`). Riêng smoke test `GeminiLive` gọi Gemini thật và tự bỏ qua (Skipped) khi thiếu `GEMINI_API_KEY`; CI chạy `dotnet test backend --filter "Category!=GeminiLive"`. Cách chạy smoke test: xem mục 8.
+
 ## 6. Tạo migration
 
 ```bash
@@ -124,3 +126,47 @@ Bundle và `database update` chỉ áp các migration còn thiếu, chạy lại
 6. Sửa bản nháp tiếp, hoặc `POST /api/admin/releases/{id}/restore-to-draft` để khôi phục một release cũ về bản nháp.
 
 Toàn bộ `/api/admin/**` yêu cầu role `Admin`; `/api/public/**` giới hạn tốc độ theo IP (`RateLimit:PublicPermitsPerMinute`, mặc định 60/phút).
+
+## 8. Cấu hình Gemini
+
+### API key
+
+Key Gemini đọc từ `Gemini:ApiKey`, **không bao giờ commit**. Khai báo bằng user-secrets:
+
+```bash
+cd backend/src/Tdmu.Advisor.Api
+dotnet user-secrets set "Gemini:ApiKey" "<key từ Google AI Studio>"
+```
+
+hoặc biến môi trường `Gemini__ApiKey=<key>`. Thiếu key thì API vẫn chạy: chat trả câu "Hệ thống đang bận…" và tài liệu tải lên bị đánh dấu thất bại với lỗi "Chưa cấu hình Gemini API key".
+
+### Các khóa cấu hình
+
+| Khóa | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| `Gemini:ApiKey` | (rỗng) | API key Gemini. |
+| `Gemini:StreamIdleTimeoutSeconds` | `30` | Thời gian tối đa chờ dữ liệu mới khi đọc luồng stream; quá hạn coi như Gemini lỗi. |
+| `Agent:ChatModel` | `gemini-3.5-flash` | Model dùng cho chat (và chuyển PDF sang Markdown). |
+| `Agent:MaxToolRounds` | `5` | Số vòng gọi model tối đa trong một câu hỏi (mỗi vòng có thể gọi tool). |
+| `Embedding:Model` | `gemini-embedding-001` | Model embedding cho tài liệu, FAQ và câu hỏi. |
+| `Embedding:Dimensions` | `768` | Số chiều vector; phải khớp cột `vector(768)` trong CSDL. |
+| `Rag:FaqThreshold` | `0.85` | Độ tương đồng cosine tối thiểu để trả thẳng câu trả lời FAQ. |
+| `Rag:TopK` | `5` | Số đoạn tài liệu tối đa đưa cho model. |
+| `Ingestion:Enabled` | `true` | Bật worker nền xử lý tài liệu tải lên và embed FAQ. |
+| `Ingestion:PollSeconds` | `5` | Chu kỳ quét việc của worker. |
+| `Storage:Root` | `data/uploads` | Thư mục lưu file tải lên (tương đối với thư mục nội dung của API). |
+| `RateLimit:ChatPermitsPerMinute` | `20` | Giới hạn `/api/chat` theo IP mỗi phút. |
+
+Giá trị trong bảng được đặt bằng user-secrets hoặc biến môi trường như mọi khóa khác (ví dụ `Agent__ChatModel=gemini-3-flash-preview`). Model chat phải nằm trong danh sách `GET https://generativelanguage.googleapis.com/v1beta/models` của key và hỗ trợ `generateContent`.
+
+### Smoke test với Gemini thật
+
+`GeminiSmokeTests` (trait `Category=GeminiLive`) dựng API với `GeminiRestClient` thật: tạo và xuất bản ngành CNTT (điểm chuẩn 21,5, phương thức thi THPT), tải lên một tài liệu `.md` về ký túc xá, chạy `IngestionService` thật, rồi hỏi hai câu qua `/api/chat` và kiểm tra tool `tra_diem_chuan`, `tim_kiem_tri_thuc` và nguồn trích dẫn. Cần Docker và key:
+
+```bash
+GEMINI_API_KEY=<key> dotnet test backend --filter Category=GeminiLive
+# Model mặc định quá tải hoặc không dùng được với key: ghi đè model chat cho riêng lần chạy này
+GEMINI_API_KEY=<key> GEMINI_CHAT_MODEL=gemini-3-flash-preview dotnet test backend --filter Category=GeminiLive
+```
+
+Thiếu `GEMINI_API_KEY` thì test được báo Skipped. Test tự hỏi lại (tối đa 5 lần, cách nhau 20 giây) khi Gemini trả 429 hoặc 503, nên một lần chạy có thể mất vài phút và tốn khoảng 10 lượt gọi API.

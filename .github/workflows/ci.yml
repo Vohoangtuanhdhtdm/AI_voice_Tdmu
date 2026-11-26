@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - run: dotnet test backend --configuration Release
+      - run: dotnet test backend --configuration Release --filter "Category!=GeminiLive"
 
   frontend:
     runs-on: ubuntu-latest

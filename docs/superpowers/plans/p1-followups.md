@@ -12,8 +12,8 @@ Danh sách này tổng hợp từ ledger thực thi kế hoạch 1 (review từn
 
 ## Cho Kế hoạch 3 (RAG/Agent)
 - Tool trả về số liệu phải dùng `NganhView.ConTuyen` để không giới thiệu ngành đã ngừng tuyển.
-- `TaiLieu.ContentKey` đang gồm cả `TrangThai` và `Loi`, nên mỗi lần trạng thái xử lý thay đổi sẽ hiện thành một thay đổi trong diff. Cần xem lại khi làm phần ingestion.
-- Embedding của FAQ chưa được tính lại khi sửa FAQ.
+- `TaiLieu.ContentKey` đang gồm cả `TrangThai` và `Loi`, nên mỗi lần trạng thái xử lý thay đổi sẽ hiện thành một thay đổi trong diff. Cần xem lại khi làm phần ingestion. **Đã xử lý ở Kế hoạch 3: `ContentKey` của `TaiLieu` không còn `TrangThai`/`Loi`.**
+- Embedding của FAQ chưa được tính lại khi sửa FAQ. **Đã xử lý ở Kế hoạch 3: sửa câu hỏi hoặc cách hỏi khác thì xóa embedding, worker ingestion embed lại; xuất bản bị chặn khi còn FAQ chưa có embedding.**
 
 ## Minor có thể làm khi tiện
 - Import:
