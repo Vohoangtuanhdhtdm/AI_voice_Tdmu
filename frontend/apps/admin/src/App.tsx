@@ -11,6 +11,7 @@ import { KbEntityPage } from "./kb/KbEntityPage";
 import { entityConfigs } from "./kb/entityConfigs";
 import { ImportPage } from "./import/ImportPage";
 import { DocumentsPage } from "./documents/DocumentsPage";
+import { PlaygroundPage } from "./playground/PlaygroundPage";
 import { ReleasesPage } from "./releases/ReleasesPage";
 import { isKbSlug } from "./layout/navigation";
 import { createQueryClient } from "./queryClient";
@@ -37,6 +38,7 @@ export function AppRoutes() {
         <Route path="/kb/:slug" element={<KbRoute />} />
         <Route path="/tai-lieu" element={<DocumentsPage />} />
         <Route path="/import" element={<ImportPage />} />
+        <Route path="/hoi-thu" element={<PlaygroundPage />} />
         <Route path="/releases" element={<ReleasesPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

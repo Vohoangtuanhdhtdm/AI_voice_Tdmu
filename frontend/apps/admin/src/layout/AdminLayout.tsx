@@ -19,6 +19,7 @@ const items: MenuProps["items"] = [
   ...KB_UNGROUPED.map(kbItem),
   { key: "/tai-lieu", label: "Tài liệu" },
   { key: "/import", label: "Nhập dữ liệu" },
+  { key: "/hoi-thu", label: "Hỏi thử" },
   { key: "/releases", label: "Xuất bản" },
 ];
 

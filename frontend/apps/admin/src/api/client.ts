@@ -62,7 +62,7 @@ async function toApiError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, title, errors, thamChieu, rawBody);
 }
 
-async function request(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
+export async function apiRequest(path: string, init: RequestInit & { json?: unknown } = {}): Promise<Response> {
   const { json, headers: initHeaders, ...rest } = init;
   const headers = new Headers(initHeaders);
   const token = authStore.getToken();
@@ -82,14 +82,14 @@ async function request(path: string, init: RequestInit & { json?: unknown } = {}
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
-  const res = await request(path, init);
+  const res = await apiRequest(path, init);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   return (text === "" ? undefined : JSON.parse(text)) as T;
 }
 
 export async function downloadBlob(path: string, fileName: string): Promise<void> {
-  const res = await request(path);
+  const res = await apiRequest(path);
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement("a");
   a.href = url;

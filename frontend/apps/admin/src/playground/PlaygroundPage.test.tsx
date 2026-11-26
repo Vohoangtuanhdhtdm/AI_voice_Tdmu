@@ -1,0 +1,167 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import { server } from "../test/server";
+import { renderWithProviders } from "../test/render";
+import { authStore } from "../auth/authStore";
+import { PlaygroundPage } from "./PlaygroundPage";
+
+vi.setConfig({ testTimeout: 15000 });
+
+beforeEach(() => {
+  authStore.setSession({ accessToken: "t", expiresAt: new Date(Date.now() + 3600_000).toISOString() });
+});
+afterEach(() => {
+  authStore.clear();
+  sessionStorage.clear();
+});
+
+const enc = new TextEncoder();
+const ev = (name: string, data: unknown) => enc.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+
+function sse(chunks: Uint8Array[]) {
+  return new HttpResponse(
+    new ReadableStream({
+      start(c) {
+        chunks.forEach((x) => c.enqueue(x));
+        c.close();
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+}
+
+async function ask(text: string) {
+  const user = userEvent.setup();
+  await user.type(screen.getByRole("textbox"), text);
+  await user.click(screen.getByRole("button", { name: "Gửi" }));
+  return user;
+}
+
+describe("PlaygroundPage", () => {
+  it("Streams_answer_tools_and_citations", async () => {
+    server.use(
+      http.post("/api/chat", () =>
+        sse([
+          ev("tool_status", { name: "tra_diem_chuan", state: "start" }),
+          ev("tool_status", { name: "tra_diem_chuan", state: "end" }),
+          ev("delta", { text: "Điểm chuẩn " }),
+          ev("delta", { text: "là 25." }),
+          ev("citations", { items: [{ ten: "Đề án 2026", url: "https://tdmu.edu.vn/de-an" }, { ten: "Không link", url: null }] }),
+          ev("done", { conversationId: "c1", messageId: "m1" }),
+        ]),
+      ),
+    );
+    renderWithProviders(<PlaygroundPage />);
+    await ask("Điểm chuẩn CNTT?");
+    expect(await screen.findByText("Điểm chuẩn là 25.")).toBeInTheDocument();
+    expect(screen.getByText("Điểm chuẩn CNTT?")).toBeInTheDocument();
+    expect(screen.getByText("Công cụ đã gọi")).toBeInTheDocument();
+    expect(screen.getByText("Tra điểm chuẩn")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Đề án 2026" })).toHaveAttribute("href", "https://tdmu.edu.vn/de-an");
+    expect(screen.getByText("Không link")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+  });
+
+  it("Sends_draft_scope_by_default_and_reuses_conversation_id", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    server.use(
+      http.post("/api/chat", async ({ request }) => {
+        bodies.push((await request.json()) as Record<string, unknown>);
+        return sse([ev("delta", { text: "ok" }), ev("done", { conversationId: "c9", messageId: null })]);
+      }),
+    );
+    renderWithProviders(<PlaygroundPage />);
+    const user = await ask("một");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+    await user.type(screen.getByRole("textbox"), "hai");
+    await user.click(screen.getByRole("button", { name: "Gửi" }));
+    await waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    expect(bodies[0]).toEqual({ message: "một", scope: "draft" });
+    expect(bodies[1]).toEqual({ message: "hai", scope: "draft", conversationId: "c9" });
+
+    // đổi phạm vi => hội thoại mới
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+    await user.click(screen.getByText("Bản đang phát hành"));
+    expect(screen.queryByText("một")).not.toBeInTheDocument();
+    await user.type(screen.getByRole("textbox"), "ba");
+    await user.click(screen.getByRole("button", { name: "Gửi" }));
+    await waitFor(() => expect(bodies).toHaveLength(3), { timeout: 5000 });
+    expect(bodies[2]).toEqual({ message: "ba", scope: "published" });
+  });
+
+  it("New_conversation_clears_messages_and_conversation_id", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    server.use(
+      http.post("/api/chat", async ({ request }) => {
+        bodies.push((await request.json()) as Record<string, unknown>);
+        return sse([ev("delta", { text: "ok" }), ev("done", { conversationId: "c9", messageId: null })]);
+      }),
+    );
+    renderWithProviders(<PlaygroundPage />);
+    const user = await ask("một");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+    await user.click(screen.getByRole("button", { name: "Hội thoại mới" }));
+    expect(screen.queryByText("một")).not.toBeInTheDocument();
+    await user.type(screen.getByRole("textbox"), "hai");
+    await user.click(screen.getByRole("button", { name: "Gửi" }));
+    await waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    expect(bodies[1]).toEqual({ message: "hai", scope: "draft" });
+  });
+
+  it("Error_event_shows_alert_and_keeps_partial_text", async () => {
+    server.use(
+      http.post("/api/chat", () =>
+        sse([ev("delta", { text: "Một phần" }), ev("error", { title: "Hệ thống đang bận" }), ev("done", { conversationId: null, messageId: null })]),
+      ),
+    );
+    renderWithProviders(<PlaygroundPage />);
+    await ask("hỏi");
+    expect(await screen.findByText("Hệ thống đang bận")).toBeInTheDocument();
+    expect(screen.getByText("Một phần")).toBeInTheDocument();
+  });
+
+  it("Http_error_shows_alert_with_server_title", async () => {
+    server.use(http.post("/api/chat", () => HttpResponse.json({ title: "Quá nhiều yêu cầu" }, { status: 429 })));
+    renderWithProviders(<PlaygroundPage />);
+    await ask("hỏi");
+    expect(await screen.findByText("Quá nhiều yêu cầu")).toBeInTheDocument();
+  });
+
+  it("Stop_aborts_stream", async () => {
+    let aborted = false;
+    server.use(
+      http.post("/api/chat", ({ request }) => {
+        request.signal.addEventListener("abort", () => (aborted = true));
+        return new HttpResponse(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(ev("delta", { text: "đang trả lời" }));
+            },
+          }),
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
+      }),
+    );
+    renderWithProviders(<PlaygroundPage />);
+    const user = await ask("hỏi");
+    expect(await screen.findByText("đang trả lời")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Gửi" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Dừng" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+    expect(screen.getByText("đang trả lời")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await waitFor(() => expect(aborted).toBe(true), { timeout: 5000 });
+  });
+
+  it("Message_limit_1000", async () => {
+    renderWithProviders(<PlaygroundPage />);
+    const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(box).toHaveAttribute("maxlength", "1000");
+    expect(screen.getByText("0/1000")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Gửi" })).toBeDisabled();
+    await userEvent.setup().type(box, "abc");
+    expect(screen.getByText("3/1000")).toBeInTheDocument();
+  });
+});
