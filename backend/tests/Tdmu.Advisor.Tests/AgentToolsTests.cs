@@ -554,4 +554,78 @@ public class AgentToolsTests(ApiFactory f)
         using var scope = f.Services.CreateScope();
         Assert.Equal(3, await scope.ServiceProvider.GetRequiredService<AdvisorDbContext>().Set<Ticket>().CountAsync(t => t.ConversationId == convId));
     }
+
+    private const string NgungTuyen = "Ngành này hiện đã ngừng tuyển sinh; không giới thiệu như một lựa chọn.";
+
+    [Fact]
+    public async Task Stopped_nganh_is_excluded_from_to_hop_and_flagged_in_nganh_tools()
+    {
+        var (c, cntt, thpt, _) = await SeedAsync();
+        var vl = await Create(c, "nganh", new { maNganh = "7440102", ten = "Vật lý học", conTuyen = false });
+        var a00 = await Create(c, "to-hop", new { ma = "A00", mon = new[] { "Toán", "Vật lý", "Hóa học" } });
+        await Create(c, "nganh-to-hop", new { nganhLid = cntt, nam = 2026, toHopLid = a00 });
+        await Create(c, "nganh-to-hop", new { nganhLid = vl, nam = 2026, toHopLid = a00 });
+        await Create(c, "diem-chuan", new { nganhLid = vl, nam = 2026, phuongThucLid = thpt, diem = 18 });
+        await Create(c, "chi-tieu", new { nganhLid = vl, nam = 2026, soLuong = 40 });
+        await Create(c, "hoc-phi", new { nganhLid = vl, nam = 2026, muc = 900000, donVi = "TinChi" });
+        await Publish(c);
+
+        var byToHop = await Invoke("tra_to_hop", new { to_hop = "A00" });
+        Assert.Equal("ok", KetQua(byToHop));
+        Assert.Equal("7480201", (string)Assert.Single(byToHop["du_lieu"]!["nganh"]!.AsArray())!["ma_nganh"]!);
+        Assert.Contains("1 ngành đã ngừng tuyển sinh", (string)byToHop["huong_dan"]!);
+
+        foreach (var (tool, args) in new (string, object)[]
+                 {
+                     ("tra_diem_chuan", new { nganh = "Vật lý học" }),
+                     ("tra_chi_tieu", new { nganh = "Vật lý học" }),
+                     ("tra_hoc_phi", new { nganh = "Vật lý học" }),
+                     ("tra_to_hop", new { nganh = "Vật lý học" }),
+                 })
+        {
+            var r = await Invoke(tool, args);
+            Assert.True(KetQua(r) == "ok", $"{tool}: {r.ToJsonString()}"); // dữ liệu lịch sử vẫn trả về
+            Assert.Contains(NgungTuyen, (string)r["huong_dan"]!);
+        }
+
+        // Ngành còn tuyển: không có cảnh báo.
+        var open = await Invoke("tra_to_hop", new { nganh = "cntt" });
+        Assert.DoesNotContain(NgungTuyen, (string?)open["huong_dan"] ?? "");
+    }
+
+    [Fact]
+    public async Task Stopped_only_to_hop_is_not_found()
+    {
+        var (c, _, _, _) = await SeedAsync();
+        var vl = await Create(c, "nganh", new { maNganh = "7440102", ten = "Vật lý học", conTuyen = false });
+        var a00 = await Create(c, "to-hop", new { ma = "A00", mon = new[] { "Toán", "Vật lý", "Hóa học" } });
+        await Create(c, "nganh-to-hop", new { nganhLid = vl, nam = 2026, toHopLid = a00 });
+        await Publish(c);
+
+        var r = await Invoke("tra_to_hop", new { to_hop = "A00" });
+        Assert.Equal("khong_tim_thay", KetQua(r));
+    }
+
+    [Fact]
+    public async Task Defaulted_year_without_data_points_to_latest_year_with_data()
+    {
+        var (c, cntt, thpt, _) = await SeedAsync();
+        await Create(c, "diem-chuan", new { nganhLid = cntt, nam = 2024, phuongThucLid = thpt, diem = 20 });
+        await Create(c, "diem-chuan", new { nganhLid = cntt, nam = 2025, phuongThucLid = thpt, diem = 21 });
+        await Create(c, "chi-tieu", new { nganhLid = cntt, nam = 2024, soLuong = 100 });
+        await Create(c, "hoc-phi", new { nganhLid = cntt, nam = 2025, muc = 1100000, donVi = "TinChi" });
+        await Publish(c);
+
+        foreach (var (tool, y) in new[] { ("tra_diem_chuan", 2025), ("tra_chi_tieu", 2024), ("tra_hoc_phi", 2025) })
+        {
+            var r = await Invoke(tool, new { nganh = "cntt" });
+            Assert.True(KetQua(r) == "khong_tim_thay", $"{tool}: {r.ToJsonString()}");
+            Assert.Contains($"Năm 2026 chưa có dữ liệu; năm gần nhất có dữ liệu là {y}. Có thể hỏi người dùng có muốn xem năm {y} không, nói rõ năm.", (string)r["huong_dan"]!);
+
+            // Người dùng tự nêu năm: không gợi ý năm khác.
+            var explicitYear = await Invoke(tool, new { nganh = "cntt", nam = 2026 });
+            Assert.Equal("khong_tim_thay", KetQua(explicitYear));
+            Assert.DoesNotContain("năm gần nhất", (string)explicitYear["huong_dan"]!);
+        }
+    }
 }

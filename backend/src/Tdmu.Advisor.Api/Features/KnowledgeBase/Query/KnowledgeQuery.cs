@@ -135,6 +135,24 @@ public class KnowledgeQuery(AdvisorDbContext db) : IKnowledgeQuery
             .Select(h => new HocPhiView(h.Muc, h.DonVi, h.GhiChu, h.NganhLid == null, h.NguonTen, h.NguonUrl)).ToListAsync(ct);
     }
 
+    public async Task<int?> LatestYearAsync(KbScope scope, SoLieuNam kind, Guid? nganhLid, Guid? phuongThucLid, CancellationToken ct)
+    {
+        var rid = await ResolveReleaseAsync(scope, ct);
+        return kind switch
+        {
+            SoLieuNam.DiemChuan => await db.DiemChuan.AsNoTracking().InScope(rid)
+                .Where(d => d.NganhLid == nganhLid && (phuongThucLid == null || d.PhuongThucLid == phuongThucLid))
+                .MaxAsync(d => (int?)d.Nam, ct),
+            SoLieuNam.ChiTieu => await db.ChiTieu.AsNoTracking().InScope(rid)
+                .Where(c => c.NganhLid == nganhLid && (phuongThucLid == null || c.PhuongThucLid == phuongThucLid))
+                .MaxAsync(c => (int?)c.Nam, ct),
+            SoLieuNam.HocPhi => await db.HocPhi.AsNoTracking().InScope(rid)
+                .Where(h => h.NganhLid == null || (nganhLid != null && h.NganhLid == nganhLid))
+                .MaxAsync(h => (int?)h.Nam, ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+    }
+
     public async Task<IReadOnlyList<MocThoiGianView>> GetMocThoiGianAsync(KbScope scope, int nam, Guid? phuongThucLid, CancellationToken ct)
     {
         var rid = await ResolveReleaseAsync(scope, ct);

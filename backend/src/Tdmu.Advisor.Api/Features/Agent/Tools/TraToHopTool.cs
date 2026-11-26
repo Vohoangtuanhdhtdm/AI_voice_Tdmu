@@ -31,22 +31,26 @@ public class TraToHopTool(IKnowledgeQuery kb) : IAgentTool
         {
             var th = await kb.FindToHopAsync(ctx.Scope, toHopArg!, ct);
             if (th is null) return ToolResult.NotFound($"tổ hợp {toHopArg}");
-            var nganhs = await kb.GetNganhOfToHopAsync(ctx.Scope, th.LogicalId, y, ct);
-            if (nganhs.Count == 0) return ToolResult.NotFound($"ngành xét tổ hợp {th.Ma} năm {y}");
+            var all = await kb.GetNganhOfToHopAsync(ctx.Scope, th.LogicalId, y, ct);
+            // Không giới thiệu ngành đã ngừng tuyển như một lựa chọn.
+            var nganhs = all.Where(n => n.ConTuyen).ToList();
+            var excluded = all.Count - nganhs.Count;
+            if (nganhs.Count == 0) return ToolResult.NotFound($"ngành còn tuyển sinh xét tổ hợp {th.Ma} năm {y}");
             var data = new JsonObject
             {
                 ["to_hop"] = ToHopJson(th.Ma, th.Mon, th.CachDoc),
-                ["nganh"] = new JsonArray(nganhs.Select(n => (JsonNode)new JsonObject { ["ma_nganh"] = n.MaNganh, ["ten"] = n.Ten, ["con_tuyen"] = n.ConTuyen }).ToArray()),
+                ["nganh"] = new JsonArray(nganhs.Select(n => (JsonNode)new JsonObject { ["ma_nganh"] = n.MaNganh, ["ten"] = n.Ten }).ToArray()),
             };
             return ToolResult.Ok(data, th.CachDoc, y,
-                ToolResult.Sources(nganhs.Select(n => (n.NguonTen, n.NguonUrl)).Prepend((th.NguonTen, th.NguonUrl))));
+                ToolResult.Sources(nganhs.Select(n => (n.NguonTen, n.NguonUrl)).Prepend((th.NguonTen, th.NguonUrl))),
+                excluded > 0 ? $"Danh sách đã bỏ {excluded} ngành đã ngừng tuyển sinh; không nhắc tới các ngành đó." : null);
         }
 
         var nganh = await ToolLookup.NganhAsync(kb, ctx, nganhArg, ct);
         if (nganh.Stop is not null) return nganh.Stop;
         var ng = nganh.Value!;
         var list = await kb.GetToHopOfNganhAsync(ctx.Scope, ng.LogicalId, y, ct);
-        if (list.Count == 0) return ToolResult.NotFound($"tổ hợp xét tuyển của ngành {ng.Ten} năm {y}");
+        if (list.Count == 0) return ToolLookup.NganhStatus(ToolResult.NotFound($"tổ hợp xét tuyển của ngành {ng.Ten} năm {y}"), ng);
 
         var result = new JsonObject
         {
@@ -60,7 +64,7 @@ public class TraToHopTool(IKnowledgeQuery kb) : IAgentTool
             var key = toHopArg.Replace(" ", "").ToUpperInvariant();
             result["co_xet_to_hop"] = list.Any(t => t.Ma.ToUpperInvariant() == key);
         }
-        return ToolResult.Ok(result, cachDoc, y, ToolResult.Sources(list.Select(t => (t.NguonTen, t.NguonUrl))),
-            ToolLookup.XacNhanNganh(ng, nganhArg));
+        return ToolLookup.NganhStatus(ToolResult.Ok(result, cachDoc, y, ToolResult.Sources(list.Select(t => (t.NguonTen, t.NguonUrl))),
+            ToolLookup.XacNhanNganh(ng, nganhArg)), ng);
     }
 }

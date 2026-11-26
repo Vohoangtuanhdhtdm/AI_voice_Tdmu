@@ -25,6 +25,9 @@ public record ChiTieuRow(string? PhuongThucMa, string? PhuongThucTen, int SoLuon
 /// <summary>Thời điểm giữ nguyên UTC; tool tự đổi sang giờ Việt Nam.</summary>
 public record MocThoiGianView(string TenMoc, DateTimeOffset BatDau, DateTimeOffset? KetThuc, string? PhuongThucTen, string? MoTa, string? NguonTen, string? NguonUrl);
 
+/// <summary>Loại số liệu cho <see cref="IKnowledgeQuery.LatestYearAsync"/>.</summary>
+public enum SoLieuNam { DiemChuan, ChiTieu, HocPhi }
+
 public interface IKnowledgeQuery
 {
     Task<Guid?> ResolveReleaseAsync(KbScope scope, CancellationToken ct);
@@ -49,4 +52,7 @@ public interface IKnowledgeQuery
     Task<IReadOnlyList<ToHopView>> GetToHopOfNganhAsync(KbScope scope, Guid nganhLid, int nam, CancellationToken ct);
     Task<ToHopRef?> FindToHopAsync(KbScope scope, string ma, CancellationToken ct);
     Task<IReadOnlyList<NganhOfToHopView>> GetNganhOfToHopAsync(KbScope scope, Guid toHopLid, int nam, CancellationToken ct);
+    /// <summary>Năm lớn nhất có số liệu loại <paramref name="kind"/> với cùng bộ lọc như truy vấn tương ứng (bỏ lọc năm); null nếu không có.
+    /// Với học phí, nganhLid = null chỉ xét mức áp dụng chung.</summary>
+    Task<int?> LatestYearAsync(KbScope scope, SoLieuNam kind, Guid? nganhLid, Guid? phuongThucLid, CancellationToken ct);
 }

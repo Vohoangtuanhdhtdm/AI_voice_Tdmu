@@ -105,6 +105,27 @@ public static class ToolLookup
         ? $"Đây là ngành gần đúng nhất với từ người dùng nói ('{tuKhoa}'): {n.Ten}. Hãy xác nhận đúng ngành với người dùng trước khi đọc số liệu."
         : null;
 
+    public const string NgungTuyenHuongDan = "Ngành này hiện đã ngừng tuyển sinh; không giới thiệu như một lựa chọn.";
+
+    /// <summary>Ngành đã ngừng tuyển: vẫn trả số liệu lịch sử nhưng thêm cảnh báo vào huong_dan.</summary>
+    public static ToolResult NganhStatus(ToolResult r, NganhMatch n) =>
+        n.ConTuyen ? r : r with { HuongDan = Join(r.HuongDan, NgungTuyenHuongDan) };
+
+    /// <summary>
+    /// Không có số liệu ở năm mặc định (người dùng không nêu năm): gợi ý năm gần nhất có dữ liệu.
+    /// Người dùng đã nêu năm thì giữ nguyên kết quả không tìm thấy.
+    /// </summary>
+    public static async Task<ToolResult> NotFoundWithLatestYearAsync(IKnowledgeQuery kb, ToolContext ctx, JsonObject args, int nam,
+        string what, SoLieuNam kind, Guid? nganhLid, Guid? phuongThucLid, CancellationToken ct)
+    {
+        var r = ToolResult.NotFound(what);
+        if (ToolArgs.Int(args, "nam") is not null) return r;
+        var latest = await kb.LatestYearAsync(ctx.Scope, kind, nganhLid, phuongThucLid, ct);
+        return latest is { } y && y != nam
+            ? r with { HuongDan = Join(r.HuongDan, $"Năm {nam} chưa có dữ liệu; năm gần nhất có dữ liệu là {y}. Có thể hỏi người dùng có muốn xem năm {y} không, nói rõ năm.") }
+            : r;
+    }
+
     public static string? Join(params string?[] huongDan)
     {
         var parts = huongDan.Where(h => !string.IsNullOrWhiteSpace(h)).ToList();

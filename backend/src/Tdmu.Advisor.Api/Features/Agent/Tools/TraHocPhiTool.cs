@@ -35,7 +35,11 @@ public class TraHocPhiTool(IKnowledgeQuery kb) : IAgentTool
 
         var rows = await kb.GetHocPhiAsync(ctx.Scope, n?.LogicalId, nam.Value!.Value, ct);
         if (rows.Count == 0)
-            return ToolResult.NotFound($"học phí {(n is null ? "chung" : "ngành " + n.Ten)} năm {nam.Value}");
+        {
+            var notFound = await ToolLookup.NotFoundWithLatestYearAsync(kb, ctx, args, nam.Value.Value,
+                $"học phí {(n is null ? "chung" : "ngành " + n.Ten)} năm {nam.Value}", SoLieuNam.HocPhi, n?.LogicalId, null, ct);
+            return n is null ? notFound : ToolLookup.NganhStatus(notFound, n);
+        }
 
         string Scope(HocPhiView r) => r.ApDungChung ? "áp dụng chung" : $"ngành {n!.Ten}";
         var data = new JsonArray(rows.Select(r => (JsonNode)new JsonObject
@@ -45,7 +49,8 @@ public class TraHocPhiTool(IKnowledgeQuery kb) : IAgentTool
         var cachDoc = (n is null ? "" : $"Ngành {n.Ten}: ") + string.Join("; ", rows.Select(r => $"{VietnameseNumberReader.ReadMoney(r.Muc)} một {DonVi(r.DonVi)} ({Scope(r)})"));
         var result = new JsonObject { ["hoc_phi"] = data };
         if (n is not null) result["nganh"] = ToolLookup.NganhJson(n);
-        return ToolResult.Ok(result, cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))),
+        var ok = ToolResult.Ok(result, cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))),
             n is null ? null : ToolLookup.XacNhanNganh(n, ToolArgs.Str(args, "nganh")!));
+        return n is null ? ok : ToolLookup.NganhStatus(ok, n);
     }
 }

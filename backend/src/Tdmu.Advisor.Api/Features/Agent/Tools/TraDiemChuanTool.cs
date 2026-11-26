@@ -25,15 +25,17 @@ public class TraDiemChuanTool(IKnowledgeQuery kb) : IAgentTool
         var n = nganh.Value!;
         var rows = await kb.GetDiemChuanAsync(ctx.Scope, n.LogicalId, nam.Value!.Value, pt.Value?.LogicalId, ct);
         if (rows.Count == 0)
-            return ToolResult.NotFound($"điểm chuẩn ngành {n.Ten} năm {nam.Value}" + (pt.Value is { } p ? $" theo phương thức {p.Ten}" : ""));
+            return ToolLookup.NganhStatus(await ToolLookup.NotFoundWithLatestYearAsync(kb, ctx, args, nam.Value.Value,
+                $"điểm chuẩn ngành {n.Ten} năm {nam.Value}" + (pt.Value is { } p ? $" theo phương thức {p.Ten}" : ""),
+                SoLieuNam.DiemChuan, n.LogicalId, pt.Value?.LogicalId, ct), n);
 
         var data = new JsonArray(rows.Select(r => (JsonNode)new JsonObject
         {
             ["phuong_thuc"] = r.PhuongThucTen, ["diem"] = r.Diem, ["thang_diem"] = r.ThangDiem, ["ghi_chu"] = r.GhiChu,
         }).ToArray());
         var cachDoc = $"Ngành {n.Ten}: " + string.Join("; ", rows.Select(r => $"{VietnameseNumberReader.Read(r.Diem)} điểm ({r.PhuongThucTen})"));
-        return ToolResult.Ok(new JsonObject { ["nganh"] = ToolLookup.NganhJson(n), ["diem_chuan"] = data },
+        return ToolLookup.NganhStatus(ToolResult.Ok(new JsonObject { ["nganh"] = ToolLookup.NganhJson(n), ["diem_chuan"] = data },
             cachDoc, nam.Value, ToolResult.Sources(rows.Select(r => (r.NguonTen, r.NguonUrl))),
-            ToolLookup.XacNhanNganh(n, ToolArgs.Str(args, "nganh")!));
+            ToolLookup.XacNhanNganh(n, ToolArgs.Str(args, "nganh")!)), n);
     }
 }

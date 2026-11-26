@@ -11,7 +11,7 @@ Danh sách này tổng hợp từ ledger thực thi kế hoạch 1 (review từn
 - Hiện app chỉ tự migrate ở Development/Testing. Ở môi trường khác, CSDL phải được migrate bằng `database update` hoặc migration bundle (xem `backend/README.md`).
 
 ## Cho Kế hoạch 3 (RAG/Agent)
-- Tool trả về số liệu phải dùng `NganhView.ConTuyen` để không giới thiệu ngành đã ngừng tuyển.
+- Tool trả về số liệu phải dùng `NganhView.ConTuyen` để không giới thiệu ngành đã ngừng tuyển. **Đã xử lý ở Kế hoạch 3: `tra_to_hop` (tổ hợp → ngành) bỏ ngành đã ngừng tuyển và nói số ngành bị bỏ trong `huong_dan`; `tra_diem_chuan`, `tra_chi_tieu`, `tra_hoc_phi`, `tra_to_hop` theo ngành vẫn trả số liệu lịch sử nhưng thêm `huong_dan` "Ngành này hiện đã ngừng tuyển sinh; không giới thiệu như một lựa chọn."**
 - `TaiLieu.ContentKey` đang gồm cả `TrangThai` và `Loi`, nên mỗi lần trạng thái xử lý thay đổi sẽ hiện thành một thay đổi trong diff. Cần xem lại khi làm phần ingestion. **Đã xử lý ở Kế hoạch 3: `ContentKey` của `TaiLieu` không còn `TrangThai`/`Loi`.**
 - Embedding của FAQ chưa được tính lại khi sửa FAQ. **Đã xử lý ở Kế hoạch 3: sửa câu hỏi hoặc cách hỏi khác thì xóa embedding, worker ingestion embed lại; xuất bản bị chặn khi còn FAQ chưa có embedding.**
 
