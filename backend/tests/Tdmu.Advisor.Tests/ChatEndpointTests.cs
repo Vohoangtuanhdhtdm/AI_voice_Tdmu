@@ -252,7 +252,7 @@ public class ChatEndpointTests(ApiFactory f)
     [Theory]
     [InlineData("garbage")]
     [InlineData("expired")]
-    public async Task Draft_scope_with_bad_token_returns_403(string kind)
+    public async Task Draft_scope_with_bad_token_returns_401_session_expired(string kind)
     {
         await SeedAsync();
         var token = "garbage";
@@ -271,7 +271,22 @@ public class ChatEndpointTests(ApiFactory f)
 
         var res = await c.PostAsJsonAsync("/api/chat", new { message = "hi", scope = "draft" });
 
-        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        // Có gửi token nhưng token hỏng/hết hạn: 401 để admin UI đưa cán bộ về trang đăng nhập.
+        Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
+        Assert.Equal("Phiên đăng nhập đã hết hạn", (await res.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task Published_scope_ignores_bad_token()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([Chunk(Text("ok"))]);
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "garbage");
+
+        var res = await c.PostAsJsonAsync("/api/chat", new { message = "hi" });
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
     }
 
     [Fact]

@@ -5,6 +5,9 @@ import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
 import { renderWithProviders } from "../test/render";
 import { authStore } from "../auth/authStore";
+import { Route, Routes } from "react-router-dom";
+import { LoginPage } from "../auth/LoginPage";
+import { RequireAuth } from "../auth/RequireAuth";
 import { PlaygroundPage } from "./PlaygroundPage";
 
 vi.setConfig({ testTimeout: 15000 });
@@ -231,4 +234,29 @@ describe("PlaygroundPage", () => {
     expect(await screen.findByText("mới")).toBeInTheDocument();
     expect(screen.queryByText(/MUỘN/)).not.toBeInTheDocument();
   });
+
+  it("Expired_session_401_goes_to_login_with_expiry_notice", async () => {
+    server.use(
+      http.post("/api/chat", () => HttpResponse.json({ title: "Phiên đăng nhập đã hết hạn" }, { status: 401 })),
+    );
+    renderWithProviders(
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/*"
+          element={
+            <RequireAuth>
+              <PlaygroundPage />
+            </RequireAuth>
+          }
+        />
+      </Routes>,
+      { route: "/playground" },
+    );
+    await ask("hỏi");
+    expect(await screen.findByText("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại")).toBeInTheDocument();
+    expect(authStore.getToken()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Gửi" })).not.toBeInTheDocument();
+  });
 });
+

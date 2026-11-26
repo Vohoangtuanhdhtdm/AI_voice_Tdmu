@@ -15,6 +15,7 @@ public static class ChatEndpoints
 {
     public const string RateLimitPolicy = "chat";
     public const int MaxMessageLength = 1000;
+    public const string SessionExpiredText = "Phiên đăng nhập đã hết hạn";
     public const string NoReleaseText = "Hệ thống chưa có dữ liệu tuyển sinh được phát hành";
 
     public static void MapChatEndpoints(this IEndpointRouteBuilder app)
@@ -31,6 +32,9 @@ public static class ChatEndpoints
         {
             // Điểm cuối ẩn danh nên middleware không ép xác thực; tự xác thực token (nếu có) tại đây.
             var auth = await http.AuthenticateAsync(JwtBearerDefaults.AuthenticationScheme);
+            // Có gửi token mà xác thực thất bại (hết hạn, sai chữ ký...): 401 để admin UI đưa về trang đăng nhập.
+            if (!auth.Succeeded && !auth.None)
+                return ProblemResults.Problem(StatusCodes.Status401Unauthorized, SessionExpiredText);
             if (!auth.Succeeded || !auth.Principal!.IsInRole(AdminSeeder.AdminRole))
                 return ProblemResults.Problem(StatusCodes.Status403Forbidden, "Chỉ cán bộ quản trị được hỏi thử trên bản nháp");
         }
