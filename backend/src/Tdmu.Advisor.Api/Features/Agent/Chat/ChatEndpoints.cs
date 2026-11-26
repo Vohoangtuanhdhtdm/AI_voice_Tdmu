@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Tdmu.Advisor.Api.Features.KnowledgeBase;
 using Tdmu.Advisor.Api.Features.KnowledgeBase.Query;
@@ -21,9 +22,11 @@ public static class ChatEndpoints
         app.MapPost("/api/chat", HandleAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
     }
 
-    private static async Task<IResult> HandleAsync(ChatRequest req, HttpContext http, ChatOrchestrator orchestrator)
+    private static async Task<IResult> HandleAsync(ChatRequest req, HttpContext http, ChatOrchestrator orchestrator, ILogger<ChatOrchestrator> logger)
     {
         var draft = string.Equals(req.Scope, "draft", StringComparison.OrdinalIgnoreCase);
+        if (!draft && !string.IsNullOrEmpty(req.Scope) && !string.Equals(req.Scope, "published", StringComparison.OrdinalIgnoreCase))
+            return ProblemResults.Problem(StatusCodes.Status400BadRequest, "Phạm vi phải là published hoặc draft");
         if (draft)
         {
             // Điểm cuối ẩn danh nên middleware không ép xác thực; tự xác thực token (nếu có) tại đây.
@@ -37,12 +40,12 @@ public static class ChatEndpoints
 
         var scope = draft ? KbScope.Draft : KbScope.Published;
         var userAgent = http.Request.Headers.UserAgent.ToString();
-        return new SseResult(orchestrator.RunAsync(req.ConversationId, message, scope, userAgent.Length == 0 ? null : userAgent, http.RequestAborted));
+        return new SseResult(logger, orchestrator.RunAsync(req.ConversationId, message, scope, userAgent.Length == 0 ? null : userAgent, http.RequestAborted));
     }
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    private sealed class SseResult(IAsyncEnumerable<ChatEvent> events) : IResult
+    private sealed class SseResult(ILogger logger, IAsyncEnumerable<ChatEvent> events) : IResult
     {
         public async Task ExecuteAsync(HttpContext http)
         {
@@ -50,6 +53,7 @@ public static class ChatEndpoints
             res.ContentType = "text/event-stream";
             res.Headers.CacheControl = "no-cache";
             res.Headers["X-Accel-Buffering"] = "no";
+            http.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
             var ct = http.RequestAborted;
             try
             {
@@ -73,6 +77,17 @@ public static class ChatEndpoints
                 }
             }
             catch (OperationCanceledException) { /* client ngắt kết nối */ }
+            catch (Exception ex)
+            {
+                // Header đã gửi nên không đổi được mã trạng thái: báo lỗi trong luồng thay vì cắt ngang.
+                logger.LogError(ex, "Lỗi bất ngờ khi stream chat");
+                try
+                {
+                    await WriteAsync(res, "error", new { title = ChatOrchestrator.BusyText }, CancellationToken.None);
+                    await WriteAsync(res, "done", new { conversationId = (Guid?)null, messageId = (Guid?)null }, CancellationToken.None);
+                }
+                catch (Exception) { /* kết nối đã đứt */ }
+            }
         }
 
         private static Task WriteAsync(HttpResponse res, ChatEvent ev, CancellationToken ct) => ev switch

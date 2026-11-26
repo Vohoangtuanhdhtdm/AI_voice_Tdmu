@@ -199,4 +199,93 @@ public class ChatEndpointTests(ApiFactory f)
 
         Assert.NotEqual(draftId, pub[^1].Data.GetProperty("conversationId").GetGuid());
     }
+
+    [Fact]
+    public async Task Unexpected_exception_streams_error_then_done_not_truncated()
+    {
+        await SeedAsync();
+        f.Gemini.FailNext = new InvalidOperationException("boom");
+
+        var res = await f.CreateClient().PostAsJsonAsync("/api/chat", new { message = "hi" });
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var events = await ReadSseAsync(res);
+        Assert.Equal(["error", "done"], events.Select(e => e.Event));
+        Assert.Equal(Busy, events[0].Data.GetProperty("title").GetString());
+        Assert.DoesNotContain("boom", events[0].Data.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("other")]
+    [InlineData("")]
+    public async Task Unknown_scope_returns_400(string scope)
+    {
+        await SeedAsync();
+        var res = await f.CreateClient().PostAsJsonAsync("/api/chat", new { message = "hi", scope = scope == "" ? "x " : scope });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Equal("Phạm vi phải là published hoặc draft", (await res.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task Scope_is_case_insensitive()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([Chunk(Text("ok"))]);
+        var res = await f.CreateClient().PostAsJsonAsync("/api/chat", new { message = "hi", scope = "Published" });
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Draft_scope_with_non_admin_token_returns_403()
+    {
+        await SeedAsync();
+        var tokens = f.Services.GetRequiredService<Tdmu.Advisor.Api.Infrastructure.Auth.JwtTokenService>();
+        var (token, _) = tokens.Create(new Microsoft.AspNetCore.Identity.IdentityUser { Id = "u1", Email = "u@x.vn" }, []);
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var res = await c.PostAsJsonAsync("/api/chat", new { message = "hi", scope = "draft" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("garbage")]
+    [InlineData("expired")]
+    public async Task Draft_scope_with_bad_token_returns_403(string kind)
+    {
+        await SeedAsync();
+        var token = "garbage";
+        if (kind == "expired")
+        {
+            var creds = new Microsoft.IdentityModel.Tokens.SigningCredentials(
+                Tdmu.Advisor.Api.Infrastructure.Auth.JwtTokenService.SigningKey(ApiFactory.TestJwtKey), Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256);
+            var now = DateTime.UtcNow;
+            var jwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken("tdmu-advisor", "tdmu-advisor-admin",
+                [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Admin")],
+                notBefore: now.AddHours(-2), expires: now.AddHours(-1), signingCredentials: creds);
+            token = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(jwt);
+        }
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var res = await c.PostAsJsonAsync("/api/chat", new { message = "hi", scope = "draft" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Chat_is_rate_limited_per_ip()
+    {
+        await SeedAsync();
+        using var limited = f.WithWebHostBuilder(b => b.UseSetting("RateLimit:ChatPermitsPerMinute", "1"));
+        var c = limited.CreateClient();
+        f.Gemini.Script.Enqueue([Chunk(Text("ok"))]);
+
+        var first = await c.PostAsJsonAsync("/api/chat", new { message = "hi" });
+        var second = await c.PostAsJsonAsync("/api/chat", new { message = "hi" });
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+    }
 }
