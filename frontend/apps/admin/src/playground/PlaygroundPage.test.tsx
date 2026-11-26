@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { configure, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/server";
@@ -8,6 +8,11 @@ import { authStore } from "../auth/authStore";
 import { PlaygroundPage } from "./PlaygroundPage";
 
 vi.setConfig({ testTimeout: 15000 });
+// Mặc định 1s của findBy/waitFor quá chặt khi cả bộ test chạy song song và máy bận.
+configure({ asyncUtilTimeout: 5000 });
+
+// Gõ từng ký tự bằng userEvent rất chậm với antd TextArea dưới tải; đặt giá trị trực tiếp cho xác định.
+const typeText = (text: string) => fireEvent.change(screen.getByRole("textbox"), { target: { value: text } });
 
 beforeEach(() => {
   authStore.setSession({ accessToken: "t", expiresAt: new Date(Date.now() + 3600_000).toISOString() });
@@ -34,7 +39,7 @@ function sse(chunks: Uint8Array[]) {
 
 async function ask(text: string) {
   const user = userEvent.setup();
-  await user.type(screen.getByRole("textbox"), text);
+  typeText(text);
   await user.click(screen.getByRole("button", { name: "Gửi" }));
   return user;
 }
@@ -61,7 +66,7 @@ describe("PlaygroundPage", () => {
     expect(screen.getByText("Tra điểm chuẩn")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Đề án 2026" })).toHaveAttribute("href", "https://tdmu.edu.vn/de-an");
     expect(screen.getByText("Không link")).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument());
   });
 
   it("Sends_draft_scope_by_default_and_reuses_conversation_id", async () => {
@@ -74,20 +79,20 @@ describe("PlaygroundPage", () => {
     );
     renderWithProviders(<PlaygroundPage />);
     const user = await ask("một");
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
-    await user.type(screen.getByRole("textbox"), "hai");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument());
+    typeText("hai");
     await user.click(screen.getByRole("button", { name: "Gửi" }));
-    await waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    await waitFor(() => expect(bodies).toHaveLength(2));
     expect(bodies[0]).toEqual({ message: "một", scope: "draft" });
     expect(bodies[1]).toEqual({ message: "hai", scope: "draft", conversationId: "c9" });
 
     // đổi phạm vi => hội thoại mới
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument());
     await user.click(screen.getByText("Bản đang phát hành"));
     expect(screen.queryByText("một")).not.toBeInTheDocument();
-    await user.type(screen.getByRole("textbox"), "ba");
+    typeText("ba");
     await user.click(screen.getByRole("button", { name: "Gửi" }));
-    await waitFor(() => expect(bodies).toHaveLength(3), { timeout: 5000 });
+    await waitFor(() => expect(bodies).toHaveLength(3));
     expect(bodies[2]).toEqual({ message: "ba", scope: "published" });
   });
 
@@ -101,12 +106,12 @@ describe("PlaygroundPage", () => {
     );
     renderWithProviders(<PlaygroundPage />);
     const user = await ask("một");
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Hội thoại mới" }));
     expect(screen.queryByText("một")).not.toBeInTheDocument();
-    await user.type(screen.getByRole("textbox"), "hai");
+    typeText("hai");
     await user.click(screen.getByRole("button", { name: "Gửi" }));
-    await waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    await waitFor(() => expect(bodies).toHaveLength(2));
     expect(bodies[1]).toEqual({ message: "hai", scope: "draft" });
   });
 
@@ -149,10 +154,10 @@ describe("PlaygroundPage", () => {
     expect(await screen.findByText("đang trả lời")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Gửi" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Dừng" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Dừng" })).not.toBeInTheDocument());
     expect(screen.getByText("đang trả lời")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    await waitFor(() => expect(aborted).toBe(true), { timeout: 5000 });
+    await waitFor(() => expect(aborted).toBe(true));
   });
 
   it("Message_limit_1000", async () => {
@@ -161,7 +166,7 @@ describe("PlaygroundPage", () => {
     expect(box).toHaveAttribute("maxlength", "1000");
     expect(screen.getByText("0/1000")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Gửi" })).toBeDisabled();
-    await userEvent.setup().type(box, "abc");
+    typeText("abc");
     expect(screen.getByText("3/1000")).toBeInTheDocument();
   });
 
@@ -221,7 +226,7 @@ describe("PlaygroundPage", () => {
     const user = await ask("một");
     await user.click(screen.getByRole("button", { name: "Hội thoại mới" }));
     first?.enqueue(ev("delta", { text: "MUỘN" }));
-    await user.type(screen.getByRole("textbox"), "hai");
+    typeText("hai");
     await user.click(screen.getByRole("button", { name: "Gửi" }));
     expect(await screen.findByText("mới")).toBeInTheDocument();
     expect(screen.queryByText(/MUỘN/)).not.toBeInTheDocument();
