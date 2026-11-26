@@ -109,4 +109,30 @@ public class TextExtractorTests
         Assert.Equal("File PDF dạng ảnh quá lớn để chuyển đổi (tối đa 14 MB)", ex.Message);
         Assert.Equal(0, _gemini.PdfCalls);
     }
+
+    private static TableRow Row(params string[] cells) =>
+        new(cells.Select(c => new TableCell(new Paragraph(new Run(new Text(c))))));
+
+    [Fact]
+    public async Task Docx_table_rows_become_blocks_with_header_context_in_document_order()
+    {
+        using var ms = new MemoryStream();
+        using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document))
+        {
+            doc.AddMainDocumentPart().Document = new Document(new Body(
+                new Paragraph(new ParagraphProperties(new ParagraphStyleId { Val = "Heading1" }), new Run(new Text("Học phí"))),
+                new Paragraph(new Run(new Text("Bảng học phí theo tín chỉ:"))),
+                new Table(Row("Ngành", "Học phí"), Row("CNTT", "1.200.000"), Row("Dược", "1.500.000")),
+                new Paragraph(new Run(new Text("Áp dụng từ năm 2026.")))));
+        }
+
+        var blocks = await new TextExtractor(_gemini).ExtractAsync(ms.ToArray(), ".docx", default);
+
+        Assert.Equal(
+            ["Bảng học phí theo tín chỉ:", "Ngành | Học phí\nCNTT | 1.200.000", "Ngành | Học phí\nDược | 1.500.000", "Áp dụng từ năm 2026."],
+            blocks.Select(b => b.Text));
+        Assert.All(blocks, b => Assert.Equal("Học phí", b.TieuDe));
+        var chunk = Assert.Single(Chunker.Split(blocks));
+        Assert.Contains("Ngành | Học phí\nCNTT | 1.200.000", chunk.NoiDung);
+    }
 }

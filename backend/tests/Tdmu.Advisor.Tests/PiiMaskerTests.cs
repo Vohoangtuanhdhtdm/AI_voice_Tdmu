@@ -10,6 +10,8 @@ public class PiiMaskerTests
     [InlineData("mail a.b@tdmu.edu.vn", "mail [EMAIL]")]
     [InlineData("điểm 21,5 năm 2026", "điểm 21,5 năm 2026")]
     [InlineData("mã ngành 7480201", "mã ngành 7480201")]
+    [InlineData("học phí 1.200.000 đồng", "học phí 1.200.000 đồng")]
+    [InlineData("tổng 12.500.000", "tổng 12.500.000")]
     public void Mask_replaces_pii(string input, string expected) =>
         Assert.Equal(expected, PiiMasker.Mask(input));
 }

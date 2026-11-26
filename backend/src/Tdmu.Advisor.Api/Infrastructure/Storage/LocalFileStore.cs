@@ -5,7 +5,9 @@ namespace Tdmu.Advisor.Api.Infrastructure.Storage;
 /// <summary>Lưu file trên đĩa dưới <c>Storage:Root</c> (mặc định <c>data/uploads</c>, tính từ thư mục nội dung của ứng dụng).</summary>
 public class LocalFileStore(IConfiguration config, IHostEnvironment env) : IFileStore
 {
-    private readonly string _root = Path.GetFullPath(config["Storage:Root"] ?? "data/uploads", env.ContentRootPath);
+    // Bỏ dấu phân cách cuối ("…/uploads/"), nếu không phép kiểm tra trong Resolve sẽ so với "…/uploads//".
+    private readonly string _root = Path.TrimEndingDirectorySeparator(
+        Path.GetFullPath(config["Storage:Root"] ?? "data/uploads", env.ContentRootPath));
 
     public async Task<string> SaveAsync(Guid logicalId, string ext, Stream content, CancellationToken ct)
     {

@@ -58,14 +58,47 @@ public class TextExtractor(IGeminiClient gemini)
             ?? new Dictionary<string, Style>();
         var blocks = new List<ExtractedBlock>();
         string? heading = null;
-        foreach (var p in doc.MainDocumentPart?.Document?.Body?.Descendants<Paragraph>() ?? [])
+
+        void AddParagraph(Paragraph p)
         {
             var text = p.InnerText.Trim();
-            if (text.Length == 0) continue;
+            if (text.Length == 0) return;
             if (IsHeading(p, styles)) heading = text;
             else blocks.Add(new ExtractedBlock(text, null, heading));
         }
+
+        // Duyệt thân tài liệu theo đúng thứ tự để bảng nằm đúng chỗ giữa các đoạn.
+        foreach (var el in doc.MainDocumentPart?.Document?.Body?.ChildElements ?? Enumerable.Empty<DocumentFormat.OpenXml.OpenXmlElement>())
+        {
+            switch (el)
+            {
+                case Paragraph p: AddParagraph(p); break;
+                case Table t: blocks.AddRange(TableBlocks(t, heading)); break;
+                default:
+                    // Khối khác (content control...): giữ cách cũ, lấy các đoạn bên trong.
+                    foreach (var p in el.Descendants<Paragraph>()) AddParagraph(p);
+                    break;
+            }
+        }
         return blocks;
+    }
+
+    /// <summary>
+    /// Mỗi dòng bảng thành một khối "ô | ô | ô"; dòng đầu (tiêu đề cột) được thêm vào đầu mỗi khối để số liệu
+    /// luôn đi kèm tên cột dù bảng bị chia sang nhiều chunk.
+    /// </summary>
+    private static IEnumerable<ExtractedBlock> TableBlocks(Table table, string? heading)
+    {
+        static string Cell(TableCell c) => string.Join(" ", c.Descendants<Paragraph>().Select(p => p.InnerText.Trim()).Where(t => t.Length > 0));
+        var rows = table.Elements<TableRow>()
+            .Select(r => r.Elements<TableCell>().Select(Cell).ToList())
+            .Where(cells => cells.Any(c => c.Length > 0))
+            .Select(cells => string.Join(" | ", cells))
+            .ToList();
+        if (rows.Count == 0) yield break;
+        if (rows.Count == 1) { yield return new ExtractedBlock(rows[0], null, heading); yield break; }
+        foreach (var row in rows.Skip(1))
+            yield return new ExtractedBlock(rows[0] + "\n" + row, null, heading);
     }
 
     /// <summary>Word tiếng Việt dùng id style địa phương hóa (ví dụ "u1"), nên tra tên style và outline level; kiểm tra id "Heading*" chỉ là dự phòng.</summary>
