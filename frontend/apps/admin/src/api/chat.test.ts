@@ -88,4 +88,31 @@ describe("streamChat", () => {
     expect((err as ApiError).status).toBe(403);
     expect((err as ApiError).title).toBe("Cần quyền quản trị");
   });
+
+  it("CR_at_chunk_end_followed_by_LF_is_not_a_blank_line", async () => {
+    // "\r" | "\n" tách mảnh: phải là một "\r\n", không thành "\n\n" cắt giữa khối.
+    server.use(
+      http.post("/api/chat", () =>
+        sseResponse(['event: delta\r', '\ndata: {"text":"x"}\r', '\n\r', '\n']),
+      ),
+    );
+    const events: ChatStreamEvent[] = [];
+    await streamChat(body, (e) => events.push(e));
+    expect(events).toEqual([{ type: "delta", text: "x" }]);
+  });
+
+  it("Ignores_wrong_shapes_and_payload_type_cannot_override_event_name", async () => {
+    server.use(
+      http.post("/api/chat", () =>
+        sseResponse([
+          'event: delta\ndata: {"foo":1}\n\n',
+          'event: delta\ndata: {"text":5}\n\n',
+          'event: delta\ndata: {"type":"error","title":"x","text":"ok"}\n\n',
+        ]),
+      ),
+    );
+    const events: ChatStreamEvent[] = [];
+    await streamChat(body, (e) => events.push(e));
+    expect(events).toEqual([{ type: "delta", text: "ok" }]);
+  });
 });

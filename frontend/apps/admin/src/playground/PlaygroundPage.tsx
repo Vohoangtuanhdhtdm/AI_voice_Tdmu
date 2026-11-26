@@ -1,22 +1,31 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, App, Button, Card, Input, List, Segmented, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Input, List, Segmented, Space, Tag, Typography } from "antd";
 import { isUnauthorized } from "../api/client";
 import { streamChat, type ChatScope, type ChatStreamEvent } from "../api/chat";
 
 const MAX_LEN = 1000;
 
 const TOOL_LABELS: Record<string, string> = {
+  tim_nganh: "Tìm ngành",
   tra_diem_chuan: "Tra điểm chuẩn",
-  tra_hoc_phi: "Tra học phí",
   tra_chi_tieu: "Tra chỉ tiêu",
-  tra_nganh: "Tra thông tin ngành",
-  tra_to_hop: "Tra tổ hợp xét tuyển",
-  tra_moc_thoi_gian: "Tra lịch tuyển sinh",
-  tim_kiem_tri_thuc: "Tìm kiếm tri thức",
-  tao_ticket: "Để lại thông tin liên hệ",
+  tra_to_hop: "Tra tổ hợp",
+  tra_hoc_phi: "Tra học phí",
+  tra_lich_tuyen_sinh: "Tra lịch tuyển sinh",
+  tim_kiem_tri_thuc: "Tìm kiếm tài liệu",
+  chuyen_tiep_can_bo: "Chuyển cán bộ tư vấn",
 };
 
 const toolLabel = (name: string) => TOOL_LABELS[name] ?? name;
+
+function isHttpUrl(url: string): boolean {
+  try {
+    const p = new URL(url).protocol;
+    return p === "http:" || p === "https:";
+  } catch {
+    return false;
+  }
+}
 
 type ToolCall = { name: string; state: "start" | "end" };
 type Citation = { ten: string; url?: string | null };
@@ -25,7 +34,6 @@ type Turn =
   | { role: "assistant"; text: string; tools: ToolCall[]; citations: Citation[] };
 
 export function PlaygroundPage() {
-  const { message } = App.useApp();
   const [scope, setScope] = useState<ChatScope>("draft");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
@@ -49,7 +57,8 @@ export function PlaygroundPage() {
       return last?.role === "assistant" ? [...prev.slice(0, -1), fn(last)] : prev;
     });
 
-  const onEvent = (e: ChatStreamEvent) => {
+  const onEvent = (e: ChatStreamEvent, signal: AbortSignal) => {
+    if (signal.aborted) return;
     switch (e.type) {
       case "delta":
         patchAssistant((t) => ({ ...t, text: t.text + e.text }));
@@ -86,11 +95,15 @@ export function PlaygroundPage() {
     setStreaming(true);
     setTurns((prev) => [...prev, { role: "user", text }, { role: "assistant", text: "", tools: [], citations: [] }]);
     try {
-      await streamChat({ conversationId: conversationId.current, message: text, scope }, onEvent, controller.signal);
+      await streamChat({ conversationId: conversationId.current, message: text, scope }, (e) => onEvent(e, controller.signal), controller.signal);
     } catch (err) {
       if (!controller.signal.aborted && !isUnauthorized(err)) {
+        // Lỗi HTTP: bỏ bong bóng trợ lý rỗng, chỉ hiện một Alert.
+        setTurns((prev) => {
+          const last = prev[prev.length - 1];
+          return last?.role === "assistant" && last.text === "" && last.tools.length === 0 ? prev.slice(0, -1) : prev;
+        });
         setError(err instanceof Error ? err.message : "Có lỗi xảy ra");
-        message.error("Không gửi được câu hỏi");
       }
     } finally {
       if (abortRef.current === controller) setStreaming(false);
@@ -136,9 +149,9 @@ export function PlaygroundPage() {
               {t.citations.length > 0 && (
                 <Space wrap style={{ marginTop: 8 }}>
                   {t.citations.map((c, j) =>
-                    c.url ? (
+                    c.url && isHttpUrl(c.url) ? (
                       <Tag key={j}>
-                        <a href={c.url} target="_blank" rel="noreferrer">
+                        <a href={c.url} target="_blank" rel="noopener noreferrer">
                           {c.ten}
                         </a>
                       </Tag>
@@ -181,10 +194,9 @@ export function PlaygroundPage() {
           aria-label="Câu hỏi"
           onChange={(e) => setInput(e.target.value)}
           onPressEnter={(e) => {
-            if (!e.shiftKey) {
-              e.preventDefault();
-              void send();
-            }
+            if (e.shiftKey || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            void send();
           }}
         />
         <Space style={{ marginTop: 8, justifyContent: "space-between", width: "100%" }}>

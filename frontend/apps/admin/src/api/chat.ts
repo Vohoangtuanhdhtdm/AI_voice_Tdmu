@@ -9,8 +9,6 @@ export type ChatStreamEvent =
   | { type: "done"; conversationId: string | null; messageId: string | null }
   | { type: "error"; title: string };
 
-const EVENT_TYPES = new Set(["delta", "tool_status", "citations", "done", "error"]);
-
 /** Parse một khối SSE (các dòng giữa hai dòng trống); trả null nếu không hợp lệ. */
 function parseBlock(block: string): ChatStreamEvent | null {
   let name = "";
@@ -19,11 +17,38 @@ function parseBlock(block: string): ChatStreamEvent | null {
     if (line.startsWith("event:")) name = line.slice(6).trim();
     else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
   }
-  if (!EVENT_TYPES.has(name) || data.length === 0) return null;
+  if (data.length === 0) return null;
+  let d: unknown;
   try {
-    return { type: name, ...(JSON.parse(data.join("\n")) as object) } as ChatStreamEvent;
+    d = JSON.parse(data.join("\n"));
   } catch {
     return null;
+  }
+  if (!d || typeof d !== "object") return null;
+  const o = d as Record<string, unknown>;
+  const idOrNull = (v: unknown) => (typeof v === "string" ? v : null);
+  switch (name) {
+    case "delta":
+      return typeof o.text === "string" ? { type: "delta", text: o.text } : null;
+    case "tool_status":
+      return typeof o.name === "string" && (o.state === "start" || o.state === "end")
+        ? { type: "tool_status", name: o.name, state: o.state }
+        : null;
+    case "citations":
+      return Array.isArray(o.items)
+        ? {
+            type: "citations",
+            items: o.items
+              .filter((x): x is { ten: string; url?: unknown } => !!x && typeof (x as { ten?: unknown }).ten === "string")
+              .map((x) => ({ ten: x.ten, url: typeof x.url === "string" ? x.url : null })),
+          }
+        : null;
+    case "done":
+      return { type: "done", conversationId: idOrNull(o.conversationId), messageId: idOrNull(o.messageId) };
+    case "error":
+      return typeof o.title === "string" ? { type: "error", title: o.title } : null;
+    default:
+      return null;
   }
 }
 
@@ -43,6 +68,9 @@ export async function streamChat(
   const decoder = new TextDecoder();
   let buffer = "";
   const flush = (final: boolean) => {
+    // Giữ lại "\r" cuối chuỗi: có thể là nửa đầu của "\r\n" nằm ở mảnh sau.
+    const hold = !final && buffer.endsWith("\r") ? "\r" : "";
+    if (hold) buffer = buffer.slice(0, -1);
     buffer = buffer.replace(/\r\n?/g, "\n");
     let idx: number;
     while ((idx = buffer.indexOf("\n\n")) >= 0) {
@@ -50,6 +78,7 @@ export async function streamChat(
       buffer = buffer.slice(idx + 2);
       if (ev) onEvent(ev);
     }
+    buffer += hold;
     if (final && buffer.trim() !== "") {
       const ev = parseBlock(buffer);
       buffer = "";

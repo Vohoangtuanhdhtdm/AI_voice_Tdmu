@@ -164,4 +164,66 @@ describe("PlaygroundPage", () => {
     await userEvent.setup().type(box, "abc");
     expect(screen.getByText("3/1000")).toBeInTheDocument();
   });
+
+  it("Shows_friendly_labels_for_all_tools_and_raw_name_fallback", async () => {
+    const names = ["tim_nganh","tra_diem_chuan","tra_chi_tieu","tra_to_hop","tra_hoc_phi","tra_lich_tuyen_sinh","tim_kiem_tri_thuc","chuyen_tiep_can_bo","cong_cu_la"];
+    server.use(
+      http.post("/api/chat", () =>
+        sse([...names.map((n) => ev("tool_status", { name: n, state: "start" })), ev("done", { conversationId: null, messageId: null })]),
+      ),
+    );
+    renderWithProviders(<PlaygroundPage />);
+    await ask("hỏi");
+    for (const l of ["Tìm ngành","Tra điểm chuẩn","Tra chỉ tiêu","Tra tổ hợp","Tra học phí","Tra lịch tuyển sinh","Tìm kiếm tài liệu","Chuyển cán bộ tư vấn","cong_cu_la"])
+      expect(await screen.findByText(l)).toBeInTheDocument();
+  });
+
+  it("Non_http_citation_url_is_not_a_link", async () => {
+    server.use(
+      http.post("/api/chat", () =>
+        sse([
+          ev("citations", { items: [{ ten: "Xấu", url: "javascript:alert(1)" }, { ten: "Hỏng", url: "not a url" }, { ten: "Tốt", url: "https://a.vn/x" }] }),
+          ev("done", { conversationId: null, messageId: null }),
+        ]),
+      ),
+    );
+    renderWithProviders(<PlaygroundPage />);
+    await ask("hỏi");
+    expect(await screen.findByText("Xấu")).toBeInTheDocument();
+    expect(screen.getByText("Hỏng")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Xấu" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Hỏng" })).not.toBeInTheDocument();
+    const ok = screen.getByRole("link", { name: "Tốt" });
+    expect(ok).toHaveAttribute("rel", "noopener noreferrer");
+    expect(ok).toHaveAttribute("target", "_blank");
+  });
+
+  it("Http_error_removes_empty_assistant_bubble_and_shows_single_error", async () => {
+    server.use(http.post("/api/chat", () => HttpResponse.json({ title: "Quá nhiều yêu cầu" }, { status: 429 })));
+    const { container } = renderWithProviders(<PlaygroundPage />);
+    await ask("hỏi");
+    expect(await screen.findByText("Quá nhiều yêu cầu")).toBeInTheDocument();
+    expect(screen.getAllByText("Quá nhiều yêu cầu")).toHaveLength(1);
+    expect(container.querySelectorAll(".ant-card")).toHaveLength(1); // chỉ bong bóng người hỏi
+  });
+
+  it("Late_events_from_superseded_stream_are_ignored", async () => {
+    let first: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let n = 0;
+    server.use(
+      http.post("/api/chat", () => {
+        if (n++ === 0)
+          return new HttpResponse(new ReadableStream({ start(c) { first = c; } }), { headers: { "Content-Type": "text/event-stream" } });
+        return sse([ev("delta", { text: "mới" }), ev("done", { conversationId: null, messageId: null })]);
+      }),
+    );
+    renderWithProviders(<PlaygroundPage />);
+    const user = await ask("một");
+    await user.click(screen.getByRole("button", { name: "Hội thoại mới" }));
+    first?.enqueue(ev("delta", { text: "MUỘN" }));
+    await user.type(screen.getByRole("textbox"), "hai");
+    await user.click(screen.getByRole("button", { name: "Gửi" }));
+    expect(await screen.findByText("mới")).toBeInTheDocument();
+    expect(screen.queryByText(/MUỘN/)).not.toBeInTheDocument();
+  });
 });
