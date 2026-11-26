@@ -22,6 +22,8 @@ public class ChatOrchestrator(
     public const string Kenh = "chat";
     public const int HistoryTurns = 10;
     public const string FallbackText = "Xin lỗi, mình chưa tìm được câu trả lời phù hợp. Bạn có muốn để lại thông tin để cán bộ tuyển sinh liên hệ không?";
+    /// <summary>Khoảng chờ trước khi thử lại cùng mô hình.</summary>
+    public static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(800);
     public const string BusyText = "Hệ thống đang bận, bạn vui lòng thử lại sau ít phút hoặc để lại thông tin để cán bộ tuyển sinh liên hệ.";
 
     /// <exception cref="NoActiveReleaseException">Scope Published mà chưa có bản xuất bản (ném ở lần lặp đầu).</exception>
@@ -62,12 +64,21 @@ public class ChatOrchestrator(
         try
         {
             var needFallback = false;
+            // Mô hình cho cả lượt: chuyển sang mô hình dự phòng thì giữ nguyên tới hết lượt.
+            var model = options.Value.ChatModel;
+            var fallbackModel = options.Value.FallbackChatModel?.Trim();
+            var switched = false;
             for (var round = 0; round < maxRounds; round++)
             {
                 var modelParts = new List<JsonObject>();
                 var calls = new List<JsonObject>();
                 var roundHasText = false;
-                var req = new GeminiRequest(systemInstruction, contents.ToList(), declarations, options.Value.ChatModel);
+                var retriedSameModel = false;
+              attempt:
+                modelParts.Clear();
+                calls.Clear();
+                GeminiUnavailableException? transient = null;
+                var req = new GeminiRequest(systemInstruction, contents.ToList(), declarations, model);
 
                 IAsyncEnumerator<GeminiChunk>? stream = null;
                 try
@@ -84,7 +95,9 @@ public class ChatOrchestrator(
                         catch (Exception ex) when (ex is GeminiUnavailableException or GeminiNotConfiguredException)
                         {
                             // ex.Message có thể chứa nội dung lỗi của Google: chỉ ghi log.
-                            logger.LogWarning(ex, "Gemini lỗi ở vòng {Round} của hội thoại {ConversationId}", round + 1, conv.Id);
+                            logger.LogWarning(ex, "Gemini ({Model}) lỗi ở vòng {Round} của hội thoại {ConversationId}", model, round + 1, conv.Id);
+                            // Chỉ thử lại khi vòng này chưa phát chữ nào cho người dùng.
+                            if (ex is GeminiUnavailableException { IsTransient: true } u && !roundHasText) transient = u;
                             failed = true;
                             break;
                         }
@@ -111,6 +124,26 @@ public class ChatOrchestrator(
                     if (stream is not null) await stream.DisposeAsync();
                 }
 
+                if (transient is not null)
+                {
+                    // Hết hạn chờ thì không chờ lại cùng mô hình (tránh treo), chuyển luôn sang mô hình dự phòng.
+                    if (!retriedSameModel && !transient.IsTimeout)
+                    {
+                        retriedSameModel = true;
+                        failed = false;
+                        await Task.Delay(RetryDelay, ct);
+                        goto attempt;
+                    }
+                    if (!switched && !string.IsNullOrEmpty(fallbackModel) && fallbackModel != model)
+                    {
+                        logger.LogWarning("Chuyển hội thoại {ConversationId} sang mô hình dự phòng {Model}", conv.Id, fallbackModel);
+                        switched = true;
+                        retriedSameModel = true;
+                        model = fallbackModel;
+                        failed = false;
+                        goto attempt;
+                    }
+                }
                 if (failed || calls.Count == 0) break;
                 // Vòng cuối: không còn lượt nào để mô hình đọc kết quả, nên không chạy tool (và không gom nguồn của chúng).
                 if (round == maxRounds - 1) { needFallback = true; break; }

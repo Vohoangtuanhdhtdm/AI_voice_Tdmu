@@ -93,4 +93,20 @@ public class TextExtractorTests
         var b = Assert.Single(await new TextExtractor(_gemini).ExtractAsync(ms.ToArray(), ".docx", default));
         Assert.Equal("Ký túc xá", b.TieuDe);
     }
+
+    [Fact]
+    public async Task Scanned_pdf_over_14_mb_is_refused_before_gemini()
+    {
+        var builder = new PdfDocumentBuilder();
+        builder.AddPage(595, 842);
+        var pdf = builder.Build();
+        // Đệm khoảng trắng sau %%EOF để file vượt 14 MB mà PdfPig vẫn đọc được.
+        var big = pdf.Concat(Enumerable.Repeat((byte)'\n', 14 * 1024 * 1024 + 1)).ToArray();
+        _gemini.PdfMarkdown = "# x\n\nkhông được gọi";
+
+        var ex = await Assert.ThrowsAsync<ExtractionException>(() => new TextExtractor(_gemini).ExtractAsync(big, ".pdf", default));
+
+        Assert.Equal("File PDF dạng ảnh quá lớn để chuyển đổi (tối đa 14 MB)", ex.Message);
+        Assert.Equal(0, _gemini.PdfCalls);
+    }
 }

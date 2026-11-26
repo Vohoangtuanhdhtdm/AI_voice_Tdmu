@@ -19,12 +19,14 @@ public class IngestionServiceTests(ApiFactory f)
         return await fn(scope.ServiceProvider, scope.ServiceProvider.GetRequiredService<AdvisorDbContext>());
     }
 
-    private Task<Guid> AddDoc(string md)
+    private Task<Guid> AddDoc(string md) => AddDoc(Encoding.UTF8.GetBytes(md), ".md");
+
+    private Task<Guid> AddDoc(byte[] data, string ext)
     {
         return Run(async (sp, db) =>
         {
-            var t = new TaiLieu { TieuDe = "Đề án", TenFileGoc = "a.md", LoaiNoiDung = "text/markdown", KichThuoc = md.Length };
-            t.DuongDanFile = await sp.GetRequiredService<IFileStore>().SaveAsync(t.LogicalId, ".md", new MemoryStream(Encoding.UTF8.GetBytes(md)), default);
+            var t = new TaiLieu { TieuDe = "Đề án", TenFileGoc = "a" + ext, LoaiNoiDung = ext == ".pdf" ? "application/pdf" : "text/markdown", KichThuoc = data.Length };
+            t.DuongDanFile = await sp.GetRequiredService<IFileStore>().SaveAsync(t.LogicalId, ext, new MemoryStream(data), default);
             db.TaiLieu.Add(t);
             await db.SaveChangesAsync();
             return t.LogicalId;
@@ -171,5 +173,67 @@ public class IngestionServiceTests(ApiFactory f)
         Assert.Equal(1, await Run((sp, _) => sp.GetRequiredService<IngestionService>().ResetStuckDocumentsAsync(default)));
         Assert.Equal(1, await Process());
         Assert.Equal(TrangThaiTaiLieu.Xong, (await Run((_, db) => db.TaiLieu.SingleAsync(x => x.LogicalId == lid))).TrangThai);
+    }
+
+    [Fact]
+    public async Task Transient_embed_failure_is_retried_once()
+    {
+        await f.ResetDatabaseAsync();
+        var lid = await AddDoc(TwoSections);
+        f.Gemini.FailNext = new GeminiUnavailableException(429);
+
+        await Process();
+
+        var t = await Run((_, db) => db.TaiLieu.SingleAsync(x => x.LogicalId == lid));
+        Assert.Equal(TrangThaiTaiLieu.Xong, t.TrangThai);
+        Assert.Equal(2, f.Gemini.EmbedCalls);
+    }
+
+    [Fact]
+    public async Task Transient_failure_twice_marks_failed()
+    {
+        await f.ResetDatabaseAsync();
+        var lid = await AddDoc(TwoSections);
+        f.Gemini.FailTimes(new GeminiUnavailableException(503), 2);
+
+        await Process();
+
+        var t = await Run((_, db) => db.TaiLieu.SingleAsync(x => x.LogicalId == lid));
+        Assert.Equal(TrangThaiTaiLieu.ThatBai, t.TrangThai);
+        Assert.Equal(2, f.Gemini.EmbedCalls);
+    }
+
+    [Fact]
+    public async Task Transient_scan_pdf_conversion_failure_is_retried_once()
+    {
+        await f.ResetDatabaseAsync();
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        builder.AddPage(595, 842);
+        var lid = await AddDoc(builder.Build(), ".pdf");
+        f.Gemini.PdfMarkdown = "# Điểm chuẩn\n\nNgành Dược có ký túc xá.";
+        f.Gemini.FailNext = new GeminiUnavailableException(503);
+
+        await Process();
+
+        var t = await Run((_, db) => db.TaiLieu.SingleAsync(x => x.LogicalId == lid));
+        Assert.Equal(TrangThaiTaiLieu.Xong, t.TrangThai);
+        Assert.Equal(2, f.Gemini.PdfCalls);
+        Assert.Equal(1, f.Gemini.EmbedCalls);
+    }
+
+    [Fact]
+    public async Task Oversized_scan_pdf_fails_with_exact_reason()
+    {
+        await f.ResetDatabaseAsync();
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        builder.AddPage(595, 842);
+        var big = builder.Build().Concat(Enumerable.Repeat((byte)'\n', 14 * 1024 * 1024 + 1)).ToArray();
+        var lid = await AddDoc(big, ".pdf");
+
+        await Process();
+
+        var t = await Run((_, db) => db.TaiLieu.SingleAsync(x => x.LogicalId == lid));
+        Assert.Equal(TrangThaiTaiLieu.ThatBai, t.TrangThai);
+        Assert.Equal("File PDF dạng ảnh quá lớn để chuyển đổi (tối đa 14 MB)", t.Loi);
     }
 }

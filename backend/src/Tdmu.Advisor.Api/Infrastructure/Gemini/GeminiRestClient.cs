@@ -10,7 +10,8 @@ public class GeminiRestClient(
     HttpClient http,
     IOptions<GeminiOptions> gemini,
     IOptions<EmbeddingOptions> embedding,
-    IOptions<AgentOptions> agent) : IGeminiClient
+    IOptions<AgentOptions> agent,
+    ILogger<GeminiRestClient>? log = null) : IGeminiClient
 {
     private const string BaseUrl = "https://generativelanguage.googleapis.com/v1beta/";
     private const int EmbedBatchSize = 100;
@@ -97,18 +98,33 @@ public class GeminiRestClient(
         }
     }
 
-    private static GeminiChunk? ParseEvent(string payload)
+    private GeminiChunk? ParseEvent(string payload)
     {
         payload = payload.Trim();
         if (!payload.StartsWith('{')) return null; // ví dụ "[DONE]"
+        JsonNode? json;
+        try { json = JsonNode.Parse(payload); }
+        catch (System.Text.Json.JsonException ex) { throw new GeminiUnavailableException(null, ex); }
         try
         {
-            var candidate = JsonNode.Parse(payload)?["candidates"]?[0];
+            // Lỗi giữa luồng (ví dụ quá tải) đến dưới dạng một sự kiện { "error": { code, message, status } }.
+            if (json?["error"] is JsonObject error)
+            {
+                int? code = error["code"] is JsonValue c && c.TryGetValue<int>(out var n) ? n : null;
+                throw new GeminiUnavailableException(code, new HttpRequestException(
+                    $"{(string?)error["status"]}: {(string?)error["message"]}".Trim(' ', ':')));
+            }
+            if ((string?)json?["promptFeedback"]?["blockReason"] is { } block)
+                log?.LogWarning("Gemini chặn prompt: blockReason {BlockReason}", block);
+            var candidate = json?["candidates"]?[0];
             var parts = candidate?["content"]?["parts"]?.AsArray()
                 .Select(p => p!.AsObject().DeepClone().AsObject()).ToList() ?? [];
-            return new GeminiChunk(parts, (string?)candidate?["finishReason"]);
+            var finish = (string?)candidate?["finishReason"];
+            if (finish is not null && finish != "STOP")
+                log?.LogWarning("Gemini kết thúc bất thường: finishReason {FinishReason}", finish);
+            return new GeminiChunk(parts, finish);
         }
-        catch (System.Text.Json.JsonException ex) { throw new GeminiUnavailableException(null, ex); }
+        catch (InvalidOperationException ex) { throw new GeminiUnavailableException(null, ex); } // sai kiểu node JSON
     }
 
     public async Task<string> PdfToMarkdownAsync(byte[] pdf, CancellationToken ct)
@@ -123,13 +139,15 @@ public class GeminiRestClient(
                     new JsonObject { ["text"] = PdfPrompt }),
             }),
         };
-        using var res = await SendAsync($"models/{agent.Value.ChatModel}:generateContent", body, HttpCompletionOption.ResponseContentRead, ct);
+        using var res = await SendAsync($"models/{agent.Value.ChatModel}:generateContent", body, HttpCompletionOption.ResponseContentRead, ct,
+            TimeSpan.FromSeconds(Math.Max(1, gemini.Value.PdfTimeoutSeconds)));
         var json = JsonNode.Parse(await ReadBodyAsync(res, ct))!;
         var parts = json["candidates"]?[0]?["content"]?["parts"]?.AsArray() ?? [];
         return string.Concat(parts.Select(p => (string?)p?["text"]));
     }
 
-    private async Task<HttpResponseMessage> SendAsync(string path, JsonObject body, HttpCompletionOption option, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAsync(string path, JsonObject body, HttpCompletionOption option, CancellationToken ct,
+        TimeSpan? timeout = null)
     {
         var key = gemini.Value.ApiKey;
         if (string.IsNullOrWhiteSpace(key)) throw new GeminiNotConfiguredException();
@@ -139,9 +157,15 @@ public class GeminiRestClient(
         };
         msg.Headers.Add("x-goog-api-key", key);
         HttpResponseMessage res;
-        try { res = await http.SendAsync(msg, option, ct); }
+        // Hạn chờ theo từng request (PDF dài hơn); với ResponseHeadersRead chỉ phủ tới lúc nhận header.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(timeout ?? TimeSpan.FromSeconds(Math.Max(1, gemini.Value.RequestTimeoutSeconds)));
+        try { res = await http.SendAsync(msg, option, timeoutCts.Token); }
         catch (HttpRequestException ex) { throw new GeminiUnavailableException(null, ex); }
-        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested) { throw new GeminiUnavailableException(null, ex); }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new GeminiUnavailableException(null, new TimeoutException("Gemini không phản hồi kịp thời hạn.", ex));
+        }
 
         if (res.IsSuccessStatusCode) return res;
         var status = (int)res.StatusCode;

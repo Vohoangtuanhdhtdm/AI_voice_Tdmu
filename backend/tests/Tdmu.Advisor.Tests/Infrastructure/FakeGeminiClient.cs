@@ -19,19 +19,27 @@ public class FakeGeminiClient : IGeminiClient
     private readonly object _lock = new();
     private readonly List<GeminiRequest> _requests = [];
     private Exception? _failNext;
+    private int _failRepeat;
+    private int _pdfCalls;
+    /// <summary>Số lần PdfToMarkdownAsync được gọi.</summary>
+    public int PdfCalls => Volatile.Read(ref _pdfCalls);
 
     public System.Collections.Concurrent.ConcurrentQueue<IReadOnlyList<GeminiChunk>> Script { get; } = new();
     /// <summary>Bản sao (snapshot) các request đã ghi nhận.</summary>
     public IReadOnlyList<GeminiRequest> Requests { get { lock (_lock) return _requests.ToList(); } }
     public string PdfMarkdown { get; set; } = "";
-    public Exception? FailNext { get { lock (_lock) return _failNext; } set { lock (_lock) _failNext = value; } }
+    public Exception? FailNext { get { lock (_lock) return _failNext; } set { lock (_lock) { _failNext = value; _failRepeat = 1; } } }
+
+    /// <summary>Lần gọi kế tiếp và <paramref name="times"/> - 1 lần sau đó đều ném <paramref name="ex"/>.</summary>
+    public void FailTimes(Exception ex, int times) { lock (_lock) { _failNext = ex; _failRepeat = times; } }
 
     public void Reset()
     {
         Script.Clear();
-        lock (_lock) { _requests.Clear(); _failNext = null; }
+        lock (_lock) { _requests.Clear(); _failNext = null; _failRepeat = 0; }
         EmbedOverride = null;
         Volatile.Write(ref _embedCalls, 0);
+        Volatile.Write(ref _pdfCalls, 0);
         PdfMarkdown = "";
     }
 
@@ -59,6 +67,7 @@ public class FakeGeminiClient : IGeminiClient
 
     public Task<string> PdfToMarkdownAsync(byte[] pdf, CancellationToken ct)
     {
+        Interlocked.Increment(ref _pdfCalls);
         ThrowIfFailing();
         return Task.FromResult(PdfMarkdown);
     }
@@ -79,7 +88,11 @@ public class FakeGeminiClient : IGeminiClient
     private void ThrowIfFailing()
     {
         Exception? ex;
-        lock (_lock) { ex = _failNext; _failNext = null; }
+        lock (_lock)
+        {
+            ex = _failNext;
+            if (ex is not null && --_failRepeat <= 0) { _failNext = null; _failRepeat = 0; }
+        }
         if (ex is not null) throw ex;
     }
 }

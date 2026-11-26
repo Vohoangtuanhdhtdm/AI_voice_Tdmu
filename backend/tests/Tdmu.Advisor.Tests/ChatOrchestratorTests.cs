@@ -201,6 +201,8 @@ public class ChatOrchestratorTests(ApiFactory f)
         Assert.StartsWith("Điểm chuẩn ", msgs[1].NoiDung);
         Assert.EndsWith(Busy, msgs[1].NoiDung);
         Assert.DoesNotContain("google", msgs[1].NoiDung);
+        // Đã có chữ trong vòng này: không thử lại.
+        Assert.Single(f.Gemini.Requests);
     }
 
     [Fact]
@@ -349,5 +351,98 @@ public class ChatOrchestratorTests(ApiFactory f)
         Assert.Contains("2026", f.Gemini.Requests[0].SystemInstruction);
         // Tool đọc bản nháp: trả ok dù chưa có bản xuất bản.
         Assert.Equal("ok", (string)f.Gemini.Requests[1].Contents[^1]["parts"]![0]!["functionResponse"]!["response"]!["ket_qua"]!);
+    }
+
+    private static GeminiChunk Fail(int? status) => new ThrowChunk(new GeminiUnavailableException(status));
+
+    [Fact]
+    public async Task Unavailable_before_text_retries_once_on_same_model()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([Fail(503)]);
+        f.Gemini.Script.Enqueue([Chunk(Text("Xin chào"))]);
+
+        var events = await Run("Chào");
+
+        Assert.Collection(events,
+            e => Assert.Equal(new Delta("Xin chào"), e),
+            e => Assert.IsType<Done>(e));
+        Assert.Equal(["gemini-3.5-flash", "gemini-3.5-flash"], f.Gemini.Requests.Select(r => r.Model));
+        var msgs = await Messages(((Done)events[^1]).ConversationId);
+        Assert.False(msgs[1].CoLoi);
+    }
+
+    [Fact]
+    public async Task Repeated_unavailable_switches_rest_of_turn_to_fallback_model()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([Fail(429)]);
+        f.Gemini.Script.Enqueue([Fail(null)]);
+        f.Gemini.Script.Enqueue([Chunk(Call("tra_diem_chuan", new JsonObject { ["nganh"] = "CNTT" }))]);
+        f.Gemini.Script.Enqueue([Chunk(Text("21,5 điểm"))]);
+
+        var events = await Run("Điểm chuẩn CNTT?");
+
+        Assert.DoesNotContain(events, e => e is ChatError);
+        Assert.Equal("21,5 điểm", string.Concat(events.OfType<Delta>().Select(d => d.Text)));
+        Assert.Equal(["gemini-3.5-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3-flash-preview"],
+            f.Gemini.Requests.Select(r => r.Model));
+    }
+
+    [Fact]
+    public async Task Fallback_model_failure_emits_busy()
+    {
+        await SeedAsync();
+        for (var i = 0; i < 3; i++) f.Gemini.Script.Enqueue([Fail(503)]);
+
+        var events = await Run("Chào");
+
+        Assert.Collection(events,
+            e => Assert.Equal(new ChatError(Busy), e),
+            e => Assert.IsType<Done>(e));
+        Assert.Equal(3, f.Gemini.Requests.Count);
+        Assert.Equal("gemini-3-flash-preview", f.Gemini.Requests[2].Model);
+    }
+
+    [Fact]
+    public async Task Non_transient_status_is_not_retried()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([Fail(400)]);
+
+        var events = await Run("Chào");
+
+        Assert.Equal(new ChatError(Busy), events[0]);
+        Assert.Single(f.Gemini.Requests);
+    }
+
+    [Fact]
+    public async Task Empty_fallback_model_disables_fallback()
+    {
+        await SeedAsync();
+        using var noFallback = f.WithWebHostBuilder(b => b.UseSetting("Agent:FallbackChatModel", ""));
+        for (var i = 0; i < 2; i++) f.Gemini.Script.Enqueue([Fail(503)]);
+        f.Gemini.Script.Enqueue([Chunk(Text("không được dùng"))]);
+
+        using var s = noFallback.Services.CreateScope();
+        var events = new List<ChatEvent>();
+        await foreach (var e in s.ServiceProvider.GetRequiredService<ChatOrchestrator>().RunAsync(null, "Chào", KbScope.Published, null, default))
+            events.Add(e);
+
+        Assert.Equal(new ChatError(Busy), events[0]);
+        Assert.Equal(2, f.Gemini.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Timeout_skips_same_model_retry_and_goes_to_fallback()
+    {
+        await SeedAsync();
+        f.Gemini.Script.Enqueue([new ThrowChunk(new GeminiUnavailableException(null, new TimeoutException("idle")))]);
+        f.Gemini.Script.Enqueue([Chunk(Text("ok"))]);
+
+        var events = await Run("Chào");
+
+        Assert.Equal(new Delta("ok"), events[0]);
+        Assert.Equal(["gemini-3.5-flash", "gemini-3-flash-preview"], f.Gemini.Requests.Select(r => r.Model));
     }
 }

@@ -8,10 +8,16 @@ namespace Tdmu.Advisor.Api.Features.Ingestion;
 
 public record ExtractedBlock(string Text, int? Trang, string? TieuDe);
 
+/// <summary>Lỗi trích nội dung có thông báo tiếng Việt hiển thị nguyên văn cho cán bộ.</summary>
+public class ExtractionException(string message) : Exception(message);
+
 public class TextExtractor(IGeminiClient gemini)
 {
     /// <summary>PDF trung bình dưới ngưỡng này (ký tự/trang) được coi là bản scan và chuyển qua Gemini.</summary>
     private const int ScanThresholdCharsPerPage = 200;
+    /// <summary>Giới hạn PDF gửi inline cho Gemini (base64 phình ~33%, request inline tối đa ~20 MB).</summary>
+    public const int MaxScanPdfBytes = 14 * 1024 * 1024;
+    public const string ScanPdfTooLarge = "File PDF dạng ảnh quá lớn để chuyển đổi (tối đa 14 MB)";
 
     public async Task<IReadOnlyList<ExtractedBlock>> ExtractAsync(byte[] data, string ext, CancellationToken ct)
     {
@@ -34,7 +40,10 @@ public class TextExtractor(IGeminiClient gemini)
 
         var total = pages.Sum(p => p.Text.Length);
         if (pages.Count == 0 || total / pages.Count < ScanThresholdCharsPerPage)
+        {
+            if (data.Length > MaxScanPdfBytes) throw new ExtractionException(ScanPdfTooLarge);
             return ParseMarkdown(await gemini.PdfToMarkdownAsync(data, ct));
+        }
 
         return pages.SelectMany(p => System.Text.RegularExpressions.Regex.Split(p.Text, @"\n\s*\n")
                 .Select(t => t.Trim()).Where(t => t.Length > 0).Select(t => new ExtractedBlock(t, p.Number, null))).ToList();

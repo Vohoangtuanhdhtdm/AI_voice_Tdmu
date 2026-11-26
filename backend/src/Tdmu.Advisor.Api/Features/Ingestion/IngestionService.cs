@@ -14,6 +14,8 @@ public class IngestionService(
 {
     private const int EmbedBatchSize = 50;
     private const int MaxErrorChars = 300;
+    /// <summary>Chờ trước khi thử lại một lần khi Gemini lỗi tạm thời (429/503/mạng).</summary>
+    public static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
 
     /// <summary>Nhận và xử lý các tài liệu nháp đang ChoXuLy. Trả về số tài liệu mà lần gọi này đã nhận xử lý (kể cả thất bại).</summary>
     public async Task<int> ProcessPendingDocumentsAsync(CancellationToken ct)
@@ -53,7 +55,9 @@ public class IngestionService(
         {
             var doc = await db.TaiLieu.AsNoTracking().FirstAsync(x => x.Id == id, ct);
             var data = await store.ReadAsync(doc.DuongDanFile, ct);
-            var blocks = await extractor.ExtractAsync(data, Path.GetExtension(doc.DuongDanFile), ct);
+            // Lỗi Gemini ở đây chỉ có thể đến từ PdfToMarkdownAsync (PDF dạng ảnh); trích lại PDF rất rẻ.
+            var blocks = await GeminiRetry.OnceAsync(() => extractor.ExtractAsync(data, Path.GetExtension(doc.DuongDanFile), ct),
+                RetryDelay, log, "chuyển PDF dạng ảnh", ct);
             var drafts = Chunker.Split(blocks);
             if (drafts.Count == 0) { await FailAsync(id, "Không trích được nội dung từ file"); return; }
 
@@ -70,7 +74,12 @@ public class IngestionService(
         {
             if (ex is GeminiNotConfiguredException) log.LogWarning("Xử lý tài liệu {Id} thất bại: chưa cấu hình Gemini API key", id);
             else log.LogWarning(ex, "Xử lý tài liệu {Id} thất bại", id);
-            await FailAsync(id, ex is GeminiNotConfiguredException ? "Chưa cấu hình Gemini API key" : "Lỗi xử lý: " + Shorten(ex.Message));
+            await FailAsync(id, ex switch
+            {
+                GeminiNotConfiguredException => "Chưa cấu hình Gemini API key",
+                ExtractionException => ex.Message,
+                _ => "Lỗi xử lý: " + Shorten(ex.Message),
+            });
         }
     }
 
@@ -118,7 +127,11 @@ public class IngestionService(
     {
         var all = new List<float[]>(texts.Count);
         for (var i = 0; i < texts.Count; i += EmbedBatchSize)
-            all.AddRange(await gemini.EmbedAsync(texts.Skip(i).Take(EmbedBatchSize).ToList(), EmbeddingTask.RetrievalDocument, ct));
+        {
+            var batch = texts.Skip(i).Take(EmbedBatchSize).ToList();
+            all.AddRange(await GeminiRetry.OnceAsync(() => gemini.EmbedAsync(batch, EmbeddingTask.RetrievalDocument, ct),
+                RetryDelay, log, "embed tài liệu", ct));
+        }
         if (all.Count != texts.Count) throw new InvalidOperationException("Số embedding trả về không khớp số đoạn văn");
         return all;
     }

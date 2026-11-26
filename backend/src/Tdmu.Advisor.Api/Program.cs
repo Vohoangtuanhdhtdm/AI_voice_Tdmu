@@ -69,7 +69,8 @@ builder.Services.AddScoped<Tdmu.Advisor.Api.Features.Ingestion.TextExtractor>();
 builder.Services.AddScoped<Tdmu.Advisor.Api.Features.Ingestion.IngestionService>();
 if (builder.Configuration.GetValue<bool?>("Ingestion:Enabled") ?? true)
     builder.Services.AddHostedService<Tdmu.Advisor.Api.Features.Ingestion.IngestionWorker>();
-builder.Services.AddHttpClient<IGeminiClient, GeminiRestClient>(c => c.Timeout = TimeSpan.FromSeconds(60));
+// Hạn chờ do GeminiRestClient tự đặt theo từng request (Gemini:RequestTimeoutSeconds, Gemini:PdfTimeoutSeconds).
+builder.Services.AddHttpClient<IGeminiClient, GeminiRestClient>(c => c.Timeout = Timeout.InfiniteTimeSpan);
 
 builder.Services.AddIdentityCore<IdentityUser>(o =>
     {

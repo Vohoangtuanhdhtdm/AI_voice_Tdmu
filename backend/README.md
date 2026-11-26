@@ -139,6 +139,7 @@ dotnet user-secrets set "Gemini:ApiKey" "<key từ Google AI Studio>"
 ```
 
 hoặc biến môi trường `Gemini__ApiKey=<key>`. Thiếu key thì API vẫn chạy: chat trả câu "Hệ thống đang bận…" và tài liệu tải lên bị đánh dấu thất bại với lỗi "Chưa cấu hình Gemini API key".
+Thiếu key thì FAQ nháp cũng không bao giờ được embed, nên xuất bản bị chặn (409) cho tới khi cấu hình key.
 
 ### Các khóa cấu hình
 
@@ -146,7 +147,10 @@ hoặc biến môi trường `Gemini__ApiKey=<key>`. Thiếu key thì API vẫn 
 | --- | --- | --- |
 | `Gemini:ApiKey` | (rỗng) | API key Gemini. |
 | `Gemini:StreamIdleTimeoutSeconds` | `30` | Thời gian tối đa chờ dữ liệu mới khi đọc luồng stream; quá hạn coi như Gemini lỗi. |
+| `Gemini:RequestTimeoutSeconds` | `60` | Hạn chờ mỗi request tới Gemini (với stream: tới lúc nhận header). |
+| `Gemini:PdfTimeoutSeconds` | `180` | Hạn chờ riêng khi chuyển PDF dạng ảnh sang Markdown (PDF dạng ảnh lớn hơn 14 MB bị từ chối). |
 | `Agent:ChatModel` | `gemini-3.5-flash` | Model dùng cho chat (và chuyển PDF sang Markdown). |
+| `Agent:FallbackChatModel` | `gemini-3-flash-preview` | Model dự phòng: một vòng chat lỗi 429/503/mạng trước khi có chữ thì thử lại một lần sau ~800 ms trên model chính, lỗi tiếp thì chuyển phần còn lại của lượt sang model này và thử thêm một lần, sau đó mới trả "Hệ thống đang bận…". Để rỗng để tắt dự phòng. (Xử lý tài liệu và embed cũng tự thử lại một lần khi gặp 429/503.) |
 | `Agent:MaxToolRounds` | `5` | Số vòng gọi model tối đa trong một câu hỏi (mỗi vòng có thể gọi tool). |
 | `Embedding:Model` | `gemini-embedding-001` | Model embedding cho tài liệu, FAQ và câu hỏi. |
 | `Embedding:Dimensions` | `768` | Số chiều vector; phải khớp cột `vector(768)` trong CSDL. |

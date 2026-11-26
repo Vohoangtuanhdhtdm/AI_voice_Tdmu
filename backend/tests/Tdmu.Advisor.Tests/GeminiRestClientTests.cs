@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Tdmu.Advisor.Api.Infrastructure.Gemini;
 
@@ -20,11 +21,22 @@ public class GeminiRestClientTests
         }
     }
 
-    private static GeminiRestClient Make(StubHandler h, string key = "test-key", int idleSeconds = 30) => new(
-        new HttpClient(h),
-        Options.Create(new GeminiOptions { ApiKey = key, StreamIdleTimeoutSeconds = idleSeconds }),
+    private static GeminiRestClient Make(StubHandler h, string key = "test-key", int idleSeconds = 30,
+        GeminiOptions? options = null, ILogger<GeminiRestClient>? log = null) => new(
+        new HttpClient(h) { Timeout = Timeout.InfiniteTimeSpan },
+        Options.Create(options ?? new GeminiOptions { ApiKey = key, StreamIdleTimeoutSeconds = idleSeconds }),
         Options.Create(new EmbeddingOptions()),
-        Options.Create(new AgentOptions()));
+        Options.Create(new AgentOptions()),
+        log);
+
+    private sealed class ListLogger : ILogger<GeminiRestClient>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
+    }
 
     private static HttpResponseMessage Json(string json, HttpStatusCode code = HttpStatusCode.OK) =>
         new(code) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
@@ -266,5 +278,66 @@ public class GeminiRestClientTests
             await foreach (var _ in Make(StalledHandler(), idleSeconds: 30).StreamGenerateAsync(SimpleRequest(), cts.Token)) { }
         });
         Assert.IsNotType<GeminiUnavailableException>(ex);
+    }
+
+    [Fact]
+    public async Task Stream_error_object_throws_unavailable_with_its_code()
+    {
+        var ex = await Assert.ThrowsAsync<GeminiUnavailableException>(() =>
+            StreamAsync("data: {\"error\":{\"code\":503,\"message\":\"The model is overloaded.\",\"status\":\"UNAVAILABLE\"}}\n\n"));
+        Assert.Equal(503, ex.Status);
+        Assert.True(ex.IsTransient);
+    }
+
+    [Fact]
+    public async Task Stream_error_object_without_code_has_null_status()
+    {
+        var ex = await Assert.ThrowsAsync<GeminiUnavailableException>(() => StreamAsync("data: {\"error\":{\"message\":\"x\"}}\n\n"));
+        Assert.Null(ex.Status);
+    }
+
+    [Fact]
+    public async Task Stream_logs_non_stop_finish_reason_and_block_reason_as_warning()
+    {
+        const string sse =
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"a\"}]},\"finishReason\":\"MAX_TOKENS\"}]}\n\n" +
+            "data: {\"promptFeedback\":{\"blockReason\":\"SAFETY\"}}\n\n" +
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"b\"}]},\"finishReason\":\"STOP\"}]}\n\n";
+        var h = new StubHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StringContent(sse, Encoding.UTF8, "text/event-stream") });
+        var log = new ListLogger();
+        await foreach (var _ in Make(h, log: log).StreamGenerateAsync(SimpleRequest(), default)) { }
+
+        var warnings = log.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message).ToList();
+        Assert.Equal(2, warnings.Count);
+        Assert.Contains(warnings, w => w.Contains("MAX_TOKENS"));
+        Assert.Contains(warnings, w => w.Contains("SAFETY"));
+    }
+
+    private sealed class SlowHandler(TimeSpan delay, string json) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            await Task.Delay(delay, ct);
+            return Json(json);
+        }
+    }
+
+    private static GeminiRestClient Make(HttpMessageHandler h, GeminiOptions opt) => new(
+        new HttpClient(h) { Timeout = Timeout.InfiniteTimeSpan }, Options.Create(opt),
+        Options.Create(new EmbeddingOptions()), Options.Create(new AgentOptions()));
+
+    [Fact]
+    public async Task Request_timeout_throws_unavailable_but_pdf_gets_longer_timeout()
+    {
+        var opt = new GeminiOptions { ApiKey = "k", RequestTimeoutSeconds = 1, PdfTimeoutSeconds = 5 };
+        var embed = new SlowHandler(TimeSpan.FromSeconds(2), EmbedResponse(1));
+        var ex = await Assert.ThrowsAsync<GeminiUnavailableException>(() =>
+            Make(embed, opt).EmbedAsync(["a"], EmbeddingTask.RetrievalDocument, default));
+        Assert.Null(ex.Status);
+        Assert.True(ex.IsTimeout);
+
+        var pdf = new SlowHandler(TimeSpan.FromSeconds(2), """{"candidates":[{"content":{"parts":[{"text":"# ok"}]}}]}""");
+        Assert.Equal("# ok", await Make(pdf, opt).PdfToMarkdownAsync([1], default));
     }
 }
